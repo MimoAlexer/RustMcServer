@@ -258,9 +258,8 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
     let mut packet_data = vec![];
     packet_data.extend(write_varint_to_vec(0x02)); // Paket-ID für Login Success
 
-    // UUID schreiben
-    let uuid_str = player.uuid.hyphenated().to_string();
-    packet_data.extend(write_string_to_vec(&uuid_str));
+    // UUID als 16-Byte-Array schreiben
+    packet_data.extend(player.uuid.as_bytes());
 
     // Benutzernamen schreiben
     packet_data.extend(write_string_to_vec(&player.username));
