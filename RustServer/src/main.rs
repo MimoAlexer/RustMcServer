@@ -3,13 +3,11 @@ use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
-use flate2::{write::ZlibEncoder, Compression};
 use uuid::Uuid;
 use std::collections::HashMap;
-use std::time::Duration;
 use rand::Rng;
 
-const PROTOCOL_VERSION: i32 = 762; // Beispiel für Version 1.21.1
+const PROTOCOL_VERSION: i32 = 762; // Example for version 1.19.4
 const SERVER_NAME: &str = "Rust Minecraft Server";
 const MAX_PLAYERS: usize = 100;
 
@@ -99,16 +97,22 @@ fn handle_client(mut stream: TcpStream, players: Arc<Mutex<Vec<Player>>>, world:
     let peer_addr = stream.peer_addr().unwrap();
     println!("New connection from: {}", peer_addr);
 
-    // Handshake-Phase
-    match handle_handshake(&mut stream) {
-        Ok(_) => println!("Handshake successful for: {}", peer_addr),
+    // Handshake Phase
+    let next_state = match handle_handshake(&mut stream) {
+        Ok(state) => state,
         Err(e) => {
             println!("Failed handshake: {}", e);
             return;
         }
+    };
+
+    if next_state == 1 {
+        // Status request (ping)
+        handle_status(&mut stream);
+        return;
     }
 
-    // Login-Phase
+    // Login Phase
     let username = match handle_login(&mut stream) {
         Ok(username) => {
             println!("Login successful for: {}", username);
@@ -139,14 +143,14 @@ fn handle_client(mut stream: TcpStream, players: Arc<Mutex<Vec<Player>>>, world:
     }
 
     // Transition to Play state
-    if let Err(_) = send_join_game(&mut stream, &player) {
+    if let Err(_) = send_join_game(&mut stream, &player, &world.lock().unwrap()) {
         println!("Failed to send join game packet to {}", username);
         return;
     }
 
     loop {
-        // Try to read data from the client
-        let length = match stream.read_u16::<BigEndian>() {
+        // Read the length of the packet
+        let length = match read_varint(&mut stream) {
             Ok(length) => length,
             Err(_) => {
                 println!("Client {} disconnected.", username);
@@ -159,7 +163,7 @@ fn handle_client(mut stream: TcpStream, players: Arc<Mutex<Vec<Player>>>, world:
         let mut buffer = vec![0; length as usize];
         match stream.read_exact(&mut buffer) {
             Ok(_) => {
-                println!("Received packet from {}: {:?}", username, buffer);
+                // Handle packet
                 handle_packet(&mut stream, &mut players.lock().unwrap(), &mut world.lock().unwrap(), &player, buffer);
             }
             Err(_) => {
@@ -174,22 +178,24 @@ fn handle_client(mut stream: TcpStream, players: Arc<Mutex<Vec<Player>>>, world:
 
 fn handle_packet(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut World, player: &Player, buffer: Vec<u8>) {
     // Handle different packet types (simplified)
-    let packet_id = buffer[0];
+    let mut cursor = std::io::Cursor::new(buffer);
+    let packet_id = match read_varint_from_cursor(&mut cursor) {
+        Ok(id) => id,
+        Err(_) => return,
+    };
+
     match packet_id {
-        0x10 => handle_player_position(stream, players, player, &buffer[1..]),
-        0x20 => handle_block_interaction(stream, world, &buffer[1..]),
-        0x30 => handle_attack(stream, players, world, player, &buffer[1..]),
-        0x40 => handle_command(stream, players, world, player, &buffer[1..]),
+        0x11 => handle_player_position(stream, players, player, &mut cursor),
+        0x1A => handle_player_position_and_rotation(stream, players, player, &mut cursor),
         _ => println!("Unknown packet ID: {}", packet_id),
     }
 }
 
-fn handle_player_position(stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, data: &[u8]) {
-    // Update player position
-    if data.len() >= 24 {
-        let x = f64::from_be_bytes(data[0..8].try_into().unwrap());
-        let y = f64::from_be_bytes(data[8..16].try_into().unwrap());
-        let z = f64::from_be_bytes(data[16..24].try_into().unwrap());
+fn handle_player_position(stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
+    if cursor.get_ref().len() >= 24 {
+        let x = cursor.read_f64::<BigEndian>().unwrap();
+        let y = cursor.read_f64::<BigEndian>().unwrap();
+        let z = cursor.read_f64::<BigEndian>().unwrap();
         println!("Player {} moved to position: ({}, {}, {})", player.username, x, y, z);
 
         // Update player data
@@ -199,204 +205,223 @@ fn handle_player_position(stream: &mut TcpStream, players: &mut Vec<Player>, pla
     }
 }
 
-fn handle_block_interaction(stream: &mut TcpStream, world: &mut World, data: &[u8]) {
-    // Handle block interaction (simplified)
-    if data.len() >= 12 {
-        let x = i32::from_be_bytes(data[0..4].try_into().unwrap());
-        let y = i32::from_be_bytes(data[4..8].try_into().unwrap());
-        let z = i32::from_be_bytes(data[8..12].try_into().unwrap());
-        println!("Block interaction at position: ({}, {}, {})", x, y, z);
+fn handle_player_position_and_rotation(stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
+    if cursor.get_ref().len() >= 32 {
+        let x = cursor.read_f64::<BigEndian>().unwrap();
+        let y = cursor.read_f64::<BigEndian>().unwrap();
+        let z = cursor.read_f64::<BigEndian>().unwrap();
+        let _yaw = cursor.read_f32::<BigEndian>().unwrap();
+        let _pitch = cursor.read_f32::<BigEndian>().unwrap();
+        println!("Player {} moved to position: ({}, {}, {})", player.username, x, y, z);
 
-        // Simulate block break (removing block)
-        world.blocks.remove(&(x, y, z));
-    }
-}
-
-fn handle_attack(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut World, player: &Player, data: &[u8]) {
-    // Handle attack interaction (simplified)
-    if data.len() >= 16 {
-        let target_type = data[0]; // 0 for player, 1 for mob
-        let target_uuid = Uuid::from_slice(&data[1..17]).unwrap();
-
-        match target_type {
-            0 => {
-                // Player attack
-                if let Some(target_player) = players.iter_mut().find(|p| p.uuid == target_uuid) {
-                    target_player.health -= 5.0;
-                    println!("Player {} attacked player {}. New health: {}", player.username, target_player.username, target_player.health);
-                    if target_player.health <= 0.0 {
-                        println!("Player {} has been killed by {}!", target_player.username, player.username);
-                        // Remove dead player from list
-                        players.retain(|p| p.uuid != target_player.uuid);
-                    }
-                }
-            }
-            1 => {
-                // Mob attack
-                if let Some(target_mob) = world.mobs.iter_mut().find(|m| m.id == target_uuid) {
-                    target_mob.health -= 5.0;
-                    println!("Player {} attacked mob {}. New health: {}", player.username, target_mob.mob_type, target_mob.health);
-                    if target_mob.health <= 0.0 {
-                        println!("Mob {} has been killed by {}!", target_mob.mob_type, player.username);
-                        // Remove dead mob from list
-                        world.mobs.retain(|m| m.id != target_mob.id);
-                    }
-                }
-            }
-            _ => println!("Unknown attack target type: {}", target_type),
+        // Update player data
+        if let Some(p) = players.iter_mut().find(|p| p.uuid == player.uuid) {
+            p.position = (x, y, z);
         }
     }
 }
 
-fn handle_command(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut World, player: &Player, data: &[u8]) {
-    // Handle command execution (simplified)
-    if let Ok(command) = String::from_utf8(data.to_vec()) {
-        println!("Player {} issued command: {}", player.username, command);
-        let args: Vec<&str> = command.split_whitespace().collect();
-        match args.get(0) {
-            Some(&"/gamemode") => {
-                if let Some(&mode) = args.get(1) {
-                    match mode {
-                        "creative" => set_game_mode(players, player, GameMode::Creative),
-                        "survival" => set_game_mode(players, player, GameMode::Survival),
-                        "adventure" => set_game_mode(players, player, GameMode::Adventure),
-                        "spectator" => set_game_mode(players, player, GameMode::Spectator),
-                        _ => println!("Unknown game mode: {}", mode),
-                    }
-                }
-            }
-            Some(&"/tp") => {
-                if let (Some(&x), Some(&y), Some(&z)) = (args.get(1), args.get(2), args.get(3)) {
-                    if let (Ok(x), Ok(y), Ok(z)) = (x.parse::<f64>(), y.parse::<f64>(), z.parse::<f64>()) {
-                        teleport_player(players, player, (x, y, z));
-                    }
-                }
-            }
-            Some(&"/op") => {
-                if player.is_operator {
-                    if let Some(&target_username) = args.get(1) {
-                        op_player(players, target_username);
-                    }
-                }
-            }
-            _ => println!("Unknown command: {}", command),
-        }
+fn handle_handshake(stream: &mut TcpStream) -> Result<i32, String> {
+    let packet_length = read_varint(stream).map_err(|_| "Failed to read packet length".to_string())?;
+    let packet_id = read_varint(stream).map_err(|_| "Failed to read packet ID".to_string())?;
+
+    if packet_id != 0x00 {
+        return Err("Invalid packet ID for handshake".to_string());
     }
+
+    let _protocol_version = read_varint(stream).map_err(|_| "Failed to read protocol version".to_string())?;
+    let _server_address = read_string(stream)?;
+    let _server_port = stream.read_u16::<BigEndian>().map_err(|_| "Failed to read server port".to_string())?;
+    let next_state = read_varint(stream).map_err(|_| "Failed to read next state".to_string())?;
+
+    Ok(next_state)
 }
 
-fn set_game_mode(players: &mut Vec<Player>, player: &Player, mode: GameMode) {
-    if let Some(p) = players.iter_mut().find(|p| p.uuid == player.uuid) {
-        p.game_mode = mode;
-        println!("Player {} set to game mode: {:?}", p.username, mode);
-    }
-}
-
-fn teleport_player(players: &mut Vec<Player>, player: &Player, position: (f64, f64, f64)) {
-    if let Some(p) = players.iter_mut().find(|p| p.uuid == player.uuid) {
-        p.position = position;
-        println!("Player {} teleported to position: ({}, {}, {})", p.username, position.0, position.1, position.2);
-    }
-}
-
-fn op_player(players: &mut Vec<Player>, target_username: &str) {
-    if let Some(p) = players.iter_mut().find(|p| p.username == target_username) {
-        p.is_operator = true;
-        println!("Player {} is now an operator", p.username);
-    }
-}
-
-fn handle_handshake(stream: &mut TcpStream) -> Result<(), String> {
-    let packet_length = match stream.read_u16::<BigEndian>() {
-        Ok(length) => length,
-        Err(_) => return Err("Failed to read packet length".to_string()),
-    };
-
-    let mut buffer = vec![0; packet_length as usize];
-    if let Err(_) = stream.read_exact(&mut buffer) {
-        return Err("Failed to read handshake packet".to_string());
-    }
-
-    // Minecraft handshake packet format:
-    // [packet ID (varint)] [protocol version (varint)] [server address (string)] [server port (unsigned short)] [next state (varint)]
-    println!("Received handshake packet: {:?}", buffer);
-    // This is where you would parse and validate the handshake
-    Ok(())
+fn handle_status(stream: &mut TcpStream) {
+    // For simplicity, we will not implement status handling
 }
 
 fn handle_login(stream: &mut TcpStream) -> Result<String, String> {
-    let packet_length = match stream.read_u16::<BigEndian>() {
-        Ok(length) => length,
-        Err(_) => return Err("Failed to read packet length".to_string()),
-    };
+    let _packet_length = read_varint(stream).map_err(|_| "Failed to read packet length".to_string())?;
+    let packet_id = read_varint(stream).map_err(|_| "Failed to read packet ID".to_string())?;
 
-    let mut buffer = vec![0; packet_length as usize];
-    if let Err(_) = stream.read_exact(&mut buffer) {
-        return Err("Failed to read login packet".to_string());
+    if packet_id != 0x00 {
+        return Err("Invalid packet ID for login start".to_string());
     }
 
-    // Minecraft login packet format:
-    // [packet ID (varint)] [player name (string)]
-    println!("Received login packet: {:?}", buffer);
-
-    // Extract username (this is a simplification)
-    let username = String::from_utf8(buffer).unwrap_or("UnknownPlayer".to_string());
+    // Read player name (string)
+    let username = read_string(stream)?;
     Ok(username)
 }
 
 fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), String> {
-    // Send a login success packet
+    let mut packet_data = vec![];
+    packet_data.extend(write_varint_to_vec(0x02)); // Packet ID for Login Success
+
+    // Write UUID
     let uuid_str = player.uuid.to_hyphenated().to_string();
-    let username = &player.username;
+    packet_data.extend(write_string_to_vec(&uuid_str));
+
+    // Write Username
+    packet_data.extend(write_string_to_vec(&player.username));
+
+    // Write packet length
     let mut packet = vec![];
+    packet.extend(write_varint_to_vec(packet_data.len() as i32));
+    packet.extend(packet_data);
 
-    // Packet ID for Login Success (0x02 for modern versions)
-    packet.push(0x02);
-    packet.extend(uuid_str.as_bytes());
-    packet.push(0); // Null terminator for UUID
-    packet.extend(username.as_bytes());
-    packet.push(0); // Null terminator for username
-
-    let packet_length = packet.len() as u16;
-    if let Err(_) = stream.write_u16::<BigEndian>(packet_length) {
-        return Err("Failed to write packet length".to_string());
-    }
-    if let Err(_) = stream.write_all(&packet) {
-        return Err("Failed to write login success packet".to_string());
-    }
+    stream.write_all(&packet).map_err(|_| "Failed to send login success packet".to_string())?;
     Ok(())
 }
 
-fn send_join_game(stream: &mut TcpStream, player: &Player) -> Result<(), String> {
-    // Send a Join Game packet to transition to play state
-    let mut packet = vec![];
+fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Result<(), String> {
+    let mut packet_data = vec![];
+    packet_data.extend(write_varint_to_vec(0x26)); // Packet ID for Join Game
 
-    // Packet ID for Join Game (0x26 for modern versions)
-    packet.push(0x26);
-    packet.extend(&[0x00, 0x00, 0x00, 0x01]); // Entity ID (just use 1 for now)
-    packet.push(match player.game_mode {
+    // Entity ID (Int)
+    packet_data.extend(&(1i32.to_be_bytes()));
+
+    // Is Hardcore (Boolean)
+    packet_data.push(0); // False
+
+    // Game Mode (Unsigned Byte)
+    packet_data.push(match player.game_mode {
         GameMode::Survival => 0,
         GameMode::Creative => 1,
         GameMode::Adventure => 2,
         GameMode::Spectator => 3,
-    }); // Game mode
-    packet.push(match world.dimension {
-        Dimension::Overworld => 0,
-        Dimension::Nether => -1,
-        Dimension::End => 1,
-    } as u8); // Dimension
-    packet.push(0); // Difficulty (0 for peaceful)
-    packet.push(0); // Max players (set to 0)
-    packet.push(0); // Level type (default)
-    packet.push(0); // Reduced debug info (false)
+    });
 
-    let packet_length = packet.len() as u16;
-    if let Err(_) = stream.write_u16::<BigEndian>(packet_length) {
-        return Err("Failed to write packet length".to_string());
+    // Previous Game Mode (Byte)
+    packet_data.push(255u8); // -1 for none
+
+    // World Count (VarInt)
+    packet_data.extend(write_varint_to_vec(1));
+
+    // World Names (Identifier)
+    packet_data.extend(write_string_to_vec("minecraft:overworld"));
+
+    // Dimension Codec (NBT Tag) - We'll send an empty NBT for simplicity
+    packet_data.extend(write_varint_to_vec(0)); // Length of NBT data
+
+    // Dimension (Identifier)
+    packet_data.extend(write_string_to_vec("minecraft:overworld"));
+
+    // World Name (Identifier)
+    packet_data.extend(write_string_to_vec("minecraft:overworld"));
+
+    // Hashed Seed (Long)
+    packet_data.extend(&0i64.to_be_bytes());
+
+    // Max Players (VarInt)
+    packet_data.extend(write_varint_to_vec(0)); // Deprecated
+
+    // View Distance (VarInt)
+    packet_data.extend(write_varint_to_vec(10));
+
+    // Simulation Distance (VarInt)
+    packet_data.extend(write_varint_to_vec(10));
+
+    // Reduced Debug Info (Boolean)
+    packet_data.push(0);
+
+    // Enable Respawn Screen (Boolean)
+    packet_data.push(1);
+
+    // Is Debug (Boolean)
+    packet_data.push(0);
+
+    // Is Flat (Boolean)
+    packet_data.push(0);
+
+    // Write packet length
+    let mut packet = vec![];
+    packet.extend(write_varint_to_vec(packet_data.len() as i32));
+    packet.extend(packet_data);
+
+    stream.write_all(&packet).map_err(|_| "Failed to send join game packet".to_string())?;
+    Ok(())
+}
+
+fn read_varint(stream: &mut TcpStream) -> Result<i32, std::io::Error> {
+    let mut num_read = 0;
+    let mut result = 0;
+    loop {
+        let mut buffer = [0u8; 1];
+        stream.read_exact(&mut buffer)?;
+        let byte = buffer[0];
+        result |= ((byte & 0b0111_1111) as i32) << (7 * num_read);
+        num_read += 1;
+        if num_read > 5 {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "VarInt too big"));
+        }
+        if (byte & 0b1000_0000) == 0 {
+            break;
+        }
     }
-    if let Err(_) = stream.write_all(&packet) {
-        return Err("Failed to write join game packet".to_string());
+    Ok(result)
+}
+
+fn read_varint_from_cursor(cursor: &mut std::io::Cursor<Vec<u8>>) -> Result<i32, std::io::Error> {
+    let mut num_read = 0;
+    let mut result = 0;
+    loop {
+        let byte = cursor.read_u8()?;
+        result |= ((byte & 0b0111_1111) as i32) << (7 * num_read);
+        num_read += 1;
+        if num_read > 5 {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "VarInt too big"));
+        }
+        if (byte & 0b1000_0000) == 0 {
+            break;
+        }
+    }
+    Ok(result)
+}
+
+fn write_varint(stream: &mut TcpStream, mut value: i32) -> Result<(), std::io::Error> {
+    loop {
+        let mut temp = (value & 0b0111_1111) as u8;
+        value >>= 7;
+        if value != 0 {
+            temp |= 0b1000_0000;
+        }
+        stream.write_all(&[temp])?;
+        if value == 0 {
+            break;
+        }
     }
     Ok(())
+}
+
+fn write_varint_to_vec(mut value: i32) -> Vec<u8> {
+    let mut buf = vec![];
+    loop {
+        let mut temp = (value & 0b0111_1111) as u8;
+        value >>= 7;
+        if value != 0 {
+            temp |= 0b1000_0000;
+        }
+        buf.push(temp);
+        if value == 0 {
+            break;
+        }
+    }
+    buf
+}
+
+fn read_string(stream: &mut TcpStream) -> Result<String, String> {
+    let length = read_varint(stream).map_err(|_| "Failed to read string length".to_string())?;
+    let mut buffer = vec![0u8; length as usize];
+    stream.read_exact(&mut buffer).map_err(|_| "Failed to read string data".to_string())?;
+    String::from_utf8(buffer).map_err(|_| "Invalid UTF-8 string".to_string())
+}
+
+fn write_string_to_vec(s: &str) -> Vec<u8> {
+    let mut buf = vec![];
+    buf.extend(write_varint_to_vec(s.len() as i32));
+    buf.extend(s.as_bytes());
+    buf
 }
 
 fn main() {
@@ -445,20 +470,3 @@ fn main() {
         }
     }
 }
-
-// Dependencies (add to Cargo.toml):
-// [dependencies]
-// byteorder = "1.4"
-// flate2 = "1.0"
-// uuid = "1.0"
-// rand = "0.8"
-
-// Verbesserungen:
-// 1. Der Server verwendet jetzt Arc<Mutex<>> für die Spieler-Liste und die Welt, um mehrere gleichzeitige Verbindungen zu unterstützen.
-// 2. Spielerbewegungen, Blockinteraktionen, Angriffe und grundlegende Weltverwaltung wurden hinzugefügt.
-// 3. Einfache Mob-Verwaltung und Angriffssysteme wurden hinzugefügt.
-// 4. UUIDs werden Spielern und Mobs zugewiesen, um sie eindeutig zu identifizieren.
-// 5. Weltgeneration mit großen Bäumen hinzugefügt, inspiriert von Terra.
-// 6. Dimensionen (Overworld, Nether, End) hinzugefügt.
-// 7. Spielmodi (Survival, Creative, Adventure, Spectator) hinzugefügt.
-// 8. Operator-Kommandos und grundlegende Befehle wie /gamemode, /tp und /op implementiert.
