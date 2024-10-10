@@ -7,7 +7,8 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use rand::Rng;
 
-const PROTOCOL_VERSION: i32 = 800; // Beispiel für Version 1.21.1
+// Aktualisierte Protokollversion für Minecraft 1.21.1
+const PROTOCOL_VERSION: i32 = 767; // Für Minecraft 1.21.1
 const SERVER_NAME: &str = "Rust Minecraft Server";
 const MAX_PLAYERS: usize = 100;
 
@@ -185,8 +186,8 @@ fn handle_packet(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut 
     };
 
     match packet_id {
-        0x11 => handle_player_position(stream, players, player, &mut cursor),
-        0x1A => handle_player_position_and_rotation(stream, players, player, &mut cursor),
+        0x12 => handle_player_position(stream, players, player, &mut cursor), // Aktualisierte Paket-ID
+        0x13 => handle_player_position_and_rotation(stream, players, player, &mut cursor), // Aktualisierte Paket-ID
         _ => println!("Unbekannte Paket-ID: {}", packet_id),
     }
 }
@@ -308,7 +309,7 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
 
 fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Result<(), String> {
     let mut packet_data = vec![];
-    packet_data.extend(write_varint_to_vec(0x26)); // Paket-ID für Join Game
+    packet_data.extend(write_varint_to_vec(0x26)); // Paket-ID für Join Game (überprüfen, ob diese ID noch korrekt ist)
 
     // Entity ID (Int)
     packet_data.extend(&(1i32.to_be_bytes()));
@@ -334,9 +335,9 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
     packet_data.extend(write_string_to_vec("minecraft:overworld"));
 
     // Dimension Codec (NBT Tag) - Wir senden der Einfachheit halber ein leeres NBT
-    packet_data.extend(write_varint_to_vec(0)); // Länge der NBT-Daten
+    packet_data.push(0x00); // NBT Ende Tag
 
-    // Dimension (Identifier)
+    // Dimension Name (Identifier)
     packet_data.extend(write_string_to_vec("minecraft:overworld"));
 
     // Weltname (Identifier)
@@ -346,7 +347,7 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
     packet_data.extend(&0i64.to_be_bytes());
 
     // Maximale Spieleranzahl (VarInt)
-    packet_data.extend(write_varint_to_vec(0)); // Veraltet
+    packet_data.extend(write_varint_to_vec(10)); // Beispielwert
 
     // Sichtweite (VarInt)
     packet_data.extend(write_varint_to_vec(10));
