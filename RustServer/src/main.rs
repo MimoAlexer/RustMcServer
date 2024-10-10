@@ -222,17 +222,37 @@ fn handle_player_position_and_rotation(stream: &mut TcpStream, players: &mut Vec
 }
 
 fn handle_handshake(stream: &mut TcpStream) -> Result<i32, String> {
-    let _packet_length = read_varint(stream).map_err(|_| "Fehler beim Lesen der Paketlänge".to_string())?;
-    let packet_id = read_varint(stream).map_err(|_| "Fehler beim Lesen der Paket-ID".to_string())?;
+    // Lesen der Paketlänge
+    let packet_length = read_varint(stream).map_err(|_| "Fehler beim Lesen der Paketlänge".to_string())?;
+
+    // Lesen des gesamten Pakets basierend auf der Paketlänge
+    let mut packet_data = vec![0u8; packet_length as usize];
+    stream.read_exact(&mut packet_data).map_err(|_| "Fehler beim Lesen des Handshake-Pakets".to_string())?;
+
+    // Verwenden eines Cursors zum Lesen aus dem Paketdatenpuffer
+    let mut cursor = std::io::Cursor::new(packet_data);
+
+    // Paket-ID lesen
+    let packet_id = read_varint_from_cursor(&mut cursor).map_err(|_| "Fehler beim Lesen der Paket-ID".to_string())?;
 
     if packet_id != 0x00 {
-        return Err("Ungültige Paket-ID für Handshake".to_string());
+        return Err(format!("Ungültige Paket-ID für Handshake: {}", packet_id));
     }
 
-    let _protocol_version = read_varint(stream).map_err(|_| "Fehler beim Lesen der Protokollversion".to_string())?;
-    let _server_address = read_string(stream)?;
-    let _server_port = stream.read_u16::<BigEndian>().map_err(|_| "Fehler beim Lesen des Serverports".to_string())?;
-    let next_state = read_varint(stream).map_err(|_| "Fehler beim Lesen des nächsten Zustands".to_string())?;
+    // Protokollversion lesen
+    let protocol_version = read_varint_from_cursor(&mut cursor).map_err(|_| "Fehler beim Lesen der Protokollversion".to_string())?;
+
+    // Serveradresse lesen (String)
+    let server_address = read_string_from_cursor(&mut cursor).map_err(|_| "Fehler beim Lesen der Serveradresse".to_string())?;
+
+    // Serverport lesen (Unsigned Short)
+    let server_port = cursor.read_u16::<BigEndian>().map_err(|_| "Fehler beim Lesen des Serverports".to_string())?;
+
+    // Nächsten Zustand lesen (VarInt)
+    let next_state = read_varint_from_cursor(&mut cursor).map_err(|_| "Fehler beim Lesen des nächsten Zustands".to_string())?;
+
+    println!("Handshake erhalten: Paket-ID={}, Protokollversion={}, Serveradresse={}, Serverport={}, NextState={}",
+             packet_id, protocol_version, server_address, server_port, next_state);
 
     Ok(next_state)
 }
@@ -242,15 +262,28 @@ fn handle_status(stream: &mut TcpStream) {
 }
 
 fn handle_login(stream: &mut TcpStream) -> Result<String, String> {
-    let _packet_length = read_varint(stream).map_err(|_| "Fehler beim Lesen der Paketlänge".to_string())?;
-    let packet_id = read_varint(stream).map_err(|_| "Fehler beim Lesen der Paket-ID".to_string())?;
+    // Lesen der Paketlänge
+    let packet_length = read_varint(stream).map_err(|_| "Fehler beim Lesen der Paketlänge".to_string())?;
+
+    // Lesen des gesamten Pakets basierend auf der Paketlänge
+    let mut packet_data = vec![0u8; packet_length as usize];
+    stream.read_exact(&mut packet_data).map_err(|_| "Fehler beim Lesen des Login-Pakets".to_string())?;
+
+    // Verwenden eines Cursors zum Lesen aus dem Paketdatenpuffer
+    let mut cursor = std::io::Cursor::new(packet_data);
+
+    // Paket-ID lesen
+    let packet_id = read_varint_from_cursor(&mut cursor).map_err(|_| "Fehler beim Lesen der Paket-ID".to_string())?;
 
     if packet_id != 0x00 {
-        return Err("Ungültige Paket-ID für Login Start".to_string());
+        return Err(format!("Ungültige Paket-ID für Login Start: {}", packet_id));
     }
 
     // Spielernamen lesen (String)
-    let username = read_string(stream)?;
+    let username = read_string_from_cursor(&mut cursor)?;
+
+    println!("Login-Versuch von Benutzername: {}", username);
+
     Ok(username)
 }
 
@@ -413,6 +446,13 @@ fn read_string(stream: &mut TcpStream) -> Result<String, String> {
     let length = read_varint(stream).map_err(|_| "Fehler beim Lesen der String-Länge".to_string())?;
     let mut buffer = vec![0u8; length as usize];
     stream.read_exact(&mut buffer).map_err(|_| "Fehler beim Lesen der String-Daten".to_string())?;
+    String::from_utf8(buffer).map_err(|_| "Ungültiger UTF-8-String".to_string())
+}
+
+fn read_string_from_cursor(cursor: &mut std::io::Cursor<Vec<u8>>) -> Result<String, String> {
+    let length = read_varint_from_cursor(cursor).map_err(|_| "Fehler beim Lesen der String-Länge".to_string())?;
+    let mut buffer = vec![0u8; length as usize];
+    cursor.read_exact(&mut buffer).map_err(|_| "Fehler beim Lesen der String-Daten".to_string())?;
     String::from_utf8(buffer).map_err(|_| "Ungültiger UTF-8-String".to_string())
 }
 
