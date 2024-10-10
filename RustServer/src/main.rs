@@ -222,7 +222,7 @@ fn handle_player_position_and_rotation(stream: &mut TcpStream, players: &mut Vec
 }
 
 fn handle_handshake(stream: &mut TcpStream) -> Result<i32, String> {
-    let packet_length = read_varint(stream).map_err(|_| "Failed to read packet length".to_string())?;
+    let _packet_length = read_varint(stream).map_err(|_| "Failed to read packet length".to_string())?;
     let packet_id = read_varint(stream).map_err(|_| "Failed to read packet ID".to_string())?;
 
     if packet_id != 0x00 {
@@ -259,7 +259,7 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
     packet_data.extend(write_varint_to_vec(0x02)); // Packet ID for Login Success
 
     // Write UUID
-    let uuid_str = player.uuid.to_hyphenated().to_string();
+    let uuid_str = player.uuid.hyphenated().to_string();
     packet_data.extend(write_string_to_vec(&uuid_str));
 
     // Write Username
