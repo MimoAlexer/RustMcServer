@@ -81,8 +81,8 @@ impl World {
             self.blocks.insert((x, y + i, z), "log".to_string());
         }
         // Generate leaves
-        for dx in -2..=2 {
-            for dz in -2..=2 {
+        for dx in -2i32..=2 {
+            for dz in -2i32..=2 {
                 for dy in 4..=6 {
                     if dx.abs() + dz.abs() + (dy - 4) < 4 {
                         self.blocks.insert((x + dx, y + dy, z + dz), "leaves".to_string());
