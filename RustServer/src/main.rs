@@ -7,7 +7,6 @@ use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 use uuid::Uuid;
 use rand::Rng;
 
-// Konstanten und Serverinformationen
 const PROTOCOL_VERSION: i32 = 767; // Protokollversion für Minecraft 1.21.1
 const SERVER_NAME: &str = "Rust Minecraft Server";
 const MAX_PLAYERS: usize = 100;
@@ -167,8 +166,8 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
     let mut packet_data = vec![];
     packet_data.extend(write_varint_to_vec(0x02)); // Packet ID für Login Success
 
-    // UUID als String ohne Bindestriche (formatieren, um sicherzustellen, dass der Client es akzeptiert)
-    let uuid_str = player.uuid.hyphenated().to_string(); // UUID als String mit Bindestrichen, z.B. "0fc44095-4196-403c-af0e-b043448e3628"
+    // UUID als String mit Bindestrichen
+    let uuid_str = player.uuid.to_string(); // UUID mit Bindestrichen: "0fc44095-4196-403c-af0e-b043448e3628"
     packet_data.extend(write_string_to_vec(&uuid_str));
     println!("Sende UUID: {}", uuid_str);
 
@@ -217,16 +216,12 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
     packet_data.extend(write_string_to_vec(world_name)); // Name der Welt
     println!("Sende Weltname: {}", world_name);
 
-    // Sende Dimension Codec als vollständiges NBT-Tag
+    // Beispielhafter Dimension Codec - Dies muss für das Protokoll angepasst werden
     let dimension_codec = vec![
         0x0A, // Compound Tag Start
-        0x00, 0x00, // Name des Compound-Tags leer
-        0x0A, // Compound Tag
-        0x00, 0x0B, // Länge der Stringlänge
-        0x5F, 0x44, 0x49, 0x4D, 0x45, 0x4E, 0x53, 0x49, 0x4F, 0x4E, 0x53, // "_DIMENSIONS"
-        0x00, 0x00, // Ende des Compound Tags
+        0x00, // NBT-Ende
     ];
-    packet_data.extend(dimension_codec); // Beispiel-NBT-Tag (dies sollte an das tatsächliche Protokoll angepasst werden)
+    packet_data.extend(dimension_codec);
     println!("Sende Dimension Codec NBT");
 
     packet_data.extend(write_string_to_vec(world_name)); // Dimension Name
@@ -452,33 +447,3 @@ fn main() {
         }
     }
 }
-
-/*Neue Verbindung von: 127.0.0.1:48488
-Neue Verbindung von: 127.0.0.1:60628
-Handshake erhalten: packet_id=0, protocol_version=767, server_address=localhost, server_port=25565, next_state=2
-Login-Versuch von Benutzername: Robloxy
-Login erfolgreich für: Robloxy
-Spielerliste: [Player { uuid: feaf61be-97b0-4005-affd-502a36496b12, username: "Robloxy", position: (0.0, 64.0, 0.0), health: 20.0, game_mode: Survival, is_operator: false }]
-Sende UUID: feaf61be97b04005affd502a36496b12
-Sende Benutzernamen: Robloxy
-Login-Erfolgs-Paketlänge: 42
-Login-Erfolgs-Paket erfolgreich gesendet.
-Sende Entity ID: [0, 0, 0, 1]
-Sende Spielmodus: 0
-Sende vorherigen Spielmodus: -1
-Sende Weltanzahl: 1
-Sende Weltname: minecraft:overworld
-Sende leeren NBT-Tag
-Sende Dimension Name: minecraft:overworld
-Sende Weltname erneut: minecraft:overworld
-Sende gehashten Seed: [0, 0, 0, 0, 0, 0, 0, 0]
-Sende maximale Spieleranzahl: 100
-Sende Sichtweite: 10
-Sende Simulations-Distanz: 10
-Sende reduzierte Debug-Info: false
-Sende Respawn-Bildschirm: true
-Sende Debug-Welt: false
-Sende flache Welt: false
-Beitrittspaket-Länge: 87
-Beitrittspaket erfolgreich gesendet.
-Client Robloxy hat die Verbindung getrennt.
