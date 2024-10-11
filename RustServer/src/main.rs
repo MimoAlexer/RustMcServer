@@ -3,21 +3,20 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use byteorder::{ReadBytesExt, BigEndian}; // Entfernte `WriteBytesExt`, da ungenutzt
+use byteorder::{ReadBytesExt, BigEndian}; // `WriteBytesExt` entfernt
 use uuid::Uuid;
 use rand::Rng;
 
-// Konstante für die maximale Anzahl an Spielern
-const MAX_PLAYERS: usize = 100; // Maximale Spieleranzahl, die gleichzeitig verbunden sein können
+const MAX_PLAYERS: usize = 100;
 
 #[derive(Debug, Clone)]
 struct Player {
     uuid: Uuid,
     username: String,
     position: (f64, f64, f64),
-    _health: f32,              // Vorangestelltes `_`, um die Warnung zu unterdrücken
+    _health: f32,
     game_mode: GameMode,
-    _is_operator: bool,        // Vorangestelltes `_`, um die Warnung zu unterdrücken
+    _is_operator: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -28,15 +27,15 @@ enum GameMode {
 #[derive(Debug, Clone)]
 struct Mob {
     id: Uuid,
-    _mob_type: String,        // Vorangestelltes `_`, um die Warnung zu unterdrücken
-    _position: (f64, f64, f64), // Vorangestelltes `_`, um die Warnung zu unterdrücken
-    _health: f32,             // Vorangestelltes `_`, um die Warnung zu unterdrücken
+    _mob_type: String,
+    _position: (f64, f64, f64),
+    _health: f32,
 }
 
 struct World {
     blocks: HashMap<(i32, i32, i32), String>,
-    _mobs: Vec<Mob>,           // Vorangestelltes `_`, um die Warnung zu unterdrücken
-    _dimension: Dimension,     // Vorangestelltes `_`, um die Warnung zu unterdrücken
+    _mobs: Vec<Mob>,
+    _dimension: Dimension,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -204,10 +203,10 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, _world: &World) -> Re
     packet_data.extend(write_string_to_vec(world_name)); // Name der Welt
     println!("Sende Weltname: {}", world_name);
 
-    // Beispielhafter Dimension Codec - Minimaler NBT-Tag
+    // Beispielhafter Dimension Codec - Detaillierterer NBT-Tag (in einfachem Format)
     let dimension_codec = vec![
-        0x0A, // Compound Tag Start
-        0x00, // Compound Tag Ende
+        0x0A, 0x00, 0x0A, 0x00, 0x00, // Compound Tag (Root Level)
+        0x00,                         // Ende des Tags
     ];
     packet_data.extend(dimension_codec);
     println!("Sende Dimension Codec NBT");
@@ -434,31 +433,3 @@ fn main() {
         }
     }
 }
-
-/*Handshake erhalten: packet_id=0, protocol_version=767, server_address=localhost, server_port=25565, next_state=2
-Login-Versuch von Benutzername: Robloxy
-Login erfolgreich für: Robloxy
-Spielerliste: [Player { uuid: 51bb4d17-914d-4cd0-8264-22f6e4e2870d, username: "Robloxy", position: (0.0, 64.0, 0.0), _health: 20.0, game_mode: Survival, _is_operator: false }]
-Sende UUID: 51bb4d17-914d-4cd0-8264-22f6e4e2870d
-Sende Benutzernamen: Robloxy
-Login-Erfolgs-Paketlänge: 46
-Login-Erfolgs-Paket erfolgreich gesendet.
-Sende Entity ID: [0, 0, 0, 1]
-Sende Spielmodus: 0
-Sende vorherigen Spielmodus: -1
-Sende Weltanzahl: 1
-Sende Weltname: minecraft:overworld
-Sende Dimension Codec NBT
-Sende Dimension Name: minecraft:overworld
-Sende Weltname erneut: minecraft:overworld
-Sende gehashten Seed: [0, 0, 0, 0, 0, 0, 0, 0]
-Sende maximale Spieleranzahl: 100
-Sende Sichtweite: 10
-Sende Simulations-Distanz: 10
-Sende reduzierte Debug-Info: false
-Sende Respawn-Bildschirm: true
-Sende Debug-Welt: false
-Sende flache Welt: false
-Beitrittspaket-Länge: 86
-Beitrittspaket erfolgreich gesendet.
-Client Robloxy hat die Verbindung getrennt.
