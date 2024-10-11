@@ -444,3 +444,33 @@ fn main() {
         }
     }
 }
+
+/*Neue Verbindung von: 127.0.0.1:48488
+Neue Verbindung von: 127.0.0.1:60628
+Handshake erhalten: packet_id=0, protocol_version=767, server_address=localhost, server_port=25565, next_state=2
+Login-Versuch von Benutzername: Robloxy
+Login erfolgreich für: Robloxy
+Spielerliste: [Player { uuid: feaf61be-97b0-4005-affd-502a36496b12, username: "Robloxy", position: (0.0, 64.0, 0.0), health: 20.0, game_mode: Survival, is_operator: false }]
+Sende UUID: feaf61be97b04005affd502a36496b12
+Sende Benutzernamen: Robloxy
+Login-Erfolgs-Paketlänge: 42
+Login-Erfolgs-Paket erfolgreich gesendet.
+Sende Entity ID: [0, 0, 0, 1]
+Sende Spielmodus: 0
+Sende vorherigen Spielmodus: -1
+Sende Weltanzahl: 1
+Sende Weltname: minecraft:overworld
+Sende leeren NBT-Tag
+Sende Dimension Name: minecraft:overworld
+Sende Weltname erneut: minecraft:overworld
+Sende gehashten Seed: [0, 0, 0, 0, 0, 0, 0, 0]
+Sende maximale Spieleranzahl: 100
+Sende Sichtweite: 10
+Sende Simulations-Distanz: 10
+Sende reduzierte Debug-Info: false
+Sende Respawn-Bildschirm: true
+Sende Debug-Welt: false
+Sende flache Welt: false
+Beitrittspaket-Länge: 87
+Beitrittspaket erfolgreich gesendet.
+Client Robloxy hat die Verbindung getrennt.
