@@ -7,6 +7,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 use uuid::Uuid;
 use rand::Rng;
 
+// Konstanten und Serverinformationen
 const PROTOCOL_VERSION: i32 = 767; // Protokollversion für Minecraft 1.21.1
 const SERVER_NAME: &str = "Rust Minecraft Server";
 const MAX_PLAYERS: usize = 100;
@@ -15,10 +16,10 @@ const MAX_PLAYERS: usize = 100;
 struct Player {
     uuid: Uuid,
     username: String,
-    position: (f64, f64, f64), // (x, y, z) Position
-    health: f32,               // Spieler-Gesundheit
-    game_mode: GameMode,       // Spielmodus des Spielers
-    is_operator: bool,         // Operator-Status
+    position: (f64, f64, f64),
+    health: f32,
+    game_mode: GameMode,
+    is_operator: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,9 +39,9 @@ struct Mob {
 }
 
 struct World {
-    blocks: HashMap<(i32, i32, i32), String>, // Blockposition und Typ
+    blocks: HashMap<(i32, i32, i32), String>,
     mobs: Vec<Mob>,
-    dimension: Dimension,                      // Welt-Dimension
+    dimension: Dimension,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -52,7 +53,7 @@ enum Dimension {
 
 impl World {
     fn generate(&mut self) {
-        println!("Generiere Welt mit großen Bäumen...");
+        println!("Generiere Welt...");
         let mut rng = rand::thread_rng();
         for x in -100..100 {
             for z in -100..100 {
@@ -69,7 +70,7 @@ impl World {
     }
 
     fn generate_large_tree(&mut self, x: i32, y: i32, z: i32) {
-        println!("Erzeuge einen großen Baum bei ({}, {}, {})", x, y, z);
+        println!("Erzeuge großen Baum bei ({}, {}, {})", x, y, z);
         for i in 0..5 {
             self.blocks.insert((x, y + i, z), "log".to_string());
         }
@@ -162,102 +163,79 @@ fn handle_client(mut stream: TcpStream, players: Arc<Mutex<Vec<Player>>>, world:
     }
 }
 
-fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), String> {
-    let mut packet_data = vec![];
-    packet_data.extend(write_varint_to_vec(0x02)); // Paket-ID für Login-Erfolg
-
-    // UUID als String (ohne Bindestriche)
-    let uuid_str = player.uuid.simple().to_string();
-    packet_data.extend(write_string_to_vec(&uuid_str));
-
-    // Benutzername senden
-    packet_data.extend(write_string_to_vec(&player.username));
-
-    // Paketlänge berechnen und senden
-    let mut packet = vec![];
-    let packet_length = packet_data.len() as i32;
-    packet.extend(write_varint_to_vec(packet_length));
-    packet.extend(packet_data);
-
-    stream.write_all(&packet).map_err(|e| format!("Fehler beim Senden des Login-Erfolgspakets: {}", e))?;
-    Ok(())
+fn handle_handshake(stream: &mut TcpStream) -> Result<i32, String> {
+    let packet_length = read_varint(stream).map_err(|e| format!("Failed to read packet length: {}", e))?;
+    let mut packet_data = vec![0u8; packet_length as usize];
+    stream.read_exact(&mut packet_data).map_err(|e| format!("Failed to read handshake packet: {}", e))?;
+    let mut cursor = std::io::Cursor::new(packet_data);
+    let packet_id = read_varint_from_cursor(&mut cursor).map_err(|e| format!("Failed to read packet ID: {}", e))?;
+    if packet_id != 0x00 {
+        return Err(format!("Invalid packet ID for handshake: {}", packet_id));
+    }
+    let protocol_version = read_varint_from_cursor(&mut cursor).map_err(|e| format!("Failed to read protocol version: {}", e))?;
+    let server_address = read_string_from_cursor(&mut cursor).map_err(|e| format!("Failed to read server address: {}", e))?;
+    let server_port = cursor.read_u16::<BigEndian>().map_err(|e| format!("Failed to read server port: {}", e))?;
+    let next_state = read_varint_from_cursor(&mut cursor).map_err(|e| format!("Failed to read next state: {}", e))?;
+    println!("Handshake erhalten: packet_id={}, protocol_version={}, server_address={}, server_port={}, next_state={}",
+             packet_id, protocol_version, server_address, server_port, next_state);
+    Ok(next_state)
 }
 
-fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Result<(), String> {
-    let mut packet_data = vec![];
-    packet_data.extend(write_varint_to_vec(0x26)); // Paket-ID für Spielbeitritt
+fn handle_status(stream: &mut TcpStream) {
+    println!("Status-Anfrage erhalten.");
+}
 
-    // Entity ID (Int)
-    let entity_id = 1i32.to_be_bytes();
-    packet_data.extend(&entity_id);
+fn handle_login(stream: &mut TcpStream) -> Result<String, String> {
+    let packet_length = read_varint(stream).map_err(|_| "Failed to read packet length".to_string())?;
+    let mut packet_data = vec![0u8; packet_length as usize];
+    stream.read_exact(&mut packet_data).map_err(|_| "Failed to read login packet".to_string())?;
+    let mut cursor = std::io::Cursor::new(packet_data);
+    let packet_id = read_varint_from_cursor(&mut cursor).map_err(|_| "Failed to read packet ID".to_string())?;
+    if packet_id != 0x00 {
+        return Err(format!("Invalid packet ID for login start: {}", packet_id));
+    }
+    let username = read_string_from_cursor(&mut cursor)?;
+    println!("Login-Versuch von Benutzername: {}", username);
+    Ok(username)
+}
 
-    // Is Hardcore (Boolean)
-    packet_data.push(0);
-
-    // Game Mode (Unsigned Byte)
-    let game_mode = match player.game_mode {
-        GameMode::Survival => 0,
-        GameMode::Creative => 1,
-        GameMode::Adventure => 2,
-        GameMode::Spectator => 3,
+fn handle_packet(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut World, player: &Player, buffer: Vec<u8>) {
+    let mut cursor = std::io::Cursor::new(buffer);
+    let packet_id = match read_varint_from_cursor(&mut cursor) {
+        Ok(id) => id,
+        Err(_) => return,
     };
-    packet_data.push(game_mode);
+    match packet_id {
+        0x12 => handle_player_position(stream, players, player, &mut cursor),
+        0x13 => handle_player_position_and_rotation(stream, players, player, &mut cursor),
+        _ => println!("Unbekannte Paket-ID: {}", packet_id),
+    }
+}
 
-    // Previous Game Mode (Byte)
-    packet_data.push(255u8);
+fn handle_player_position(stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
+    if cursor.get_ref().len() >= 24 {
+        let x = cursor.read_f64::<BigEndian>().unwrap();
+        let y = cursor.read_f64::<BigEndian>().unwrap();
+        let z = cursor.read_f64::<BigEndian>().unwrap();
+        println!("Spieler {} bewegte sich zu Position: ({}, {}, {})", player.username, x, y, z);
+        if let Some(p) = players.iter_mut().find(|p| p.uuid == player.uuid) {
+            p.position = (x, y, z);
+        }
+    }
+}
 
-    // World Count (VarInt)
-    packet_data.extend(write_varint_to_vec(1));
-
-    // World Names (Identifier)
-    let world_name = "minecraft:overworld";
-    packet_data.extend(write_string_to_vec(world_name));
-
-    // Dimension Codec (NBT Tag) - Verwende ein minimales NBT-Tag
-    packet_data.push(0x0A); // NBT Compound Tag
-    packet_data.push(0x00); // Leerzeichen-String
-    packet_data.push(0x00); // Ende des Compound-Tags
-
-    // Dimension Name (Identifier)
-    packet_data.extend(write_string_to_vec(world_name));
-
-    // World Name (Identifier)
-    packet_data.extend(write_string_to_vec(world_name));
-
-    // Hashed Seed (Long)
-    packet_data.extend(&[0u8; 8]);
-
-    // Max Players (VarInt)
-    packet_data.extend(write_varint_to_vec(MAX_PLAYERS as i32));
-
-    // View Distance (VarInt)
-    let view_distance = 10;
-    packet_data.extend(write_varint_to_vec(view_distance));
-
-    // Simulation Distance (VarInt)
-    let simulation_distance = 10;
-    packet_data.extend(write_varint_to_vec(simulation_distance));
-
-    // Reduced Debug Info (Boolean)
-    packet_data.push(0);
-
-    // Enable Respawn Screen (Boolean)
-    packet_data.push(1);
-
-    // Is Debug (Boolean)
-    packet_data.push(0);
-
-    // Is Flat (Boolean)
-    packet_data.push(0);
-
-    // Paketlänge berechnen und senden
-    let mut packet = vec![];
-    let packet_length = packet_data.len() as i32;
-    packet.extend(write_varint_to_vec(packet_length));
-    packet.extend(packet_data);
-
-    stream.write_all(&packet).map_err(|e| format!("Fehler beim Senden des Spielbeitrittspakets: {}", e))?;
-    Ok(())
+fn handle_player_position_and_rotation(stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
+    if cursor.get_ref().len() >= 32 {
+        let x = cursor.read_f64::<BigEndian>().unwrap();
+        let y = cursor.read_f64::<BigEndian>().unwrap();
+        let z = cursor.read_f64::<BigEndian>().unwrap();
+        let _yaw = cursor.read_f32::<BigEndian>().unwrap();
+        let _pitch = cursor.read_f32::<BigEndian>().unwrap();
+        println!("Spieler {} bewegte sich zu Position: ({}, {}, {})", player.username, x, y, z);
+        if let Some(p) = players.iter_mut().find(|p| p.uuid == player.uuid) {
+            p.position = (x, y, z);
+        }
+    }
 }
 
 fn read_varint(stream: &mut TcpStream) -> Result<i32, std::io::Error> {
@@ -296,19 +274,11 @@ fn read_varint_from_cursor(cursor: &mut std::io::Cursor<Vec<u8>>) -> Result<i32,
     Ok(result)
 }
 
-fn write_varint(stream: &mut TcpStream, mut value: i32) -> Result<(), std::io::Error> {
-    loop {
-        let mut temp = (value & 0b0111_1111) as u8;
-        value >>= 7;
-        if value != 0 {
-            temp |= 0b1000_0000;
-        }
-        stream.write_all(&[temp])?;
-        if value == 0 {
-            break;
-        }
-    }
-    Ok(())
+fn read_string_from_cursor(cursor: &mut std::io::Cursor<Vec<u8>>) -> Result<String, String> {
+    let length = read_varint_from_cursor(cursor).map_err(|_| "Failed to read string length".to_string())?;
+    let mut buffer = vec![0u8; length as usize];
+    cursor.read_exact(&mut buffer).map_err(|_| "Failed to read string data".to_string())?;
+    String::from_utf8(buffer).map_err(|_| "Invalid UTF-8 string".to_string())
 }
 
 fn write_varint_to_vec(mut value: i32) -> Vec<u8> {
@@ -327,20 +297,6 @@ fn write_varint_to_vec(mut value: i32) -> Vec<u8> {
     buf
 }
 
-fn read_string(stream: &mut TcpStream) -> Result<String, String> {
-    let length = read_varint(stream).map_err(|_| "Failed to read string length".to_string())?;
-    let mut buffer = vec![0u8; length as usize];
-    stream.read_exact(&mut buffer).map_err(|_| "Failed to read string data".to_string())?;
-    String::from_utf8(buffer).map_err(|_| "Invalid UTF-8 string".to_string())
-}
-
-fn read_string_from_cursor(cursor: &mut std::io::Cursor<Vec<u8>>) -> Result<String, String> {
-    let length = read_varint_from_cursor(cursor).map_err(|_| "Failed to read string length".to_string())?;
-    let mut buffer = vec![0u8; length as usize];
-    cursor.read_exact(&mut buffer).map_err(|_| "Failed to read string data".to_string())?;
-    String::from_utf8(buffer).map_err(|_| "Invalid UTF-8 string".to_string())
-}
-
 fn write_string_to_vec(s: &str) -> Vec<u8> {
     let mut buf = vec![];
     buf.extend(write_varint_to_vec(s.len() as i32));
@@ -349,7 +305,6 @@ fn write_string_to_vec(s: &str) -> Vec<u8> {
 }
 
 fn main() {
-    // Shared player list with Arc and Mutex for thread-safe access
     let players = Arc::new(Mutex::new(Vec::with_capacity(MAX_PLAYERS)));
     let world = Arc::new(Mutex::new(World {
         blocks: HashMap::new(),
@@ -369,56 +324,20 @@ fn main() {
         ],
         dimension: Dimension::Overworld,
     }));
-
-    // Generate the world
     world.lock().unwrap().generate();
-
-    // Listen for incoming TCP connections on port 25565 (Minecraft default port)
     let listener = TcpListener::bind("0.0.0.0:25565").unwrap();
-    println!("Server listening on port 25565...");
+    println!("Server hört auf Port 25565...");
 
-    // Accept incoming connections
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let players = Arc::clone(&players);
                 let world = Arc::clone(&world);
-                // Handle each connection in a new thread
                 thread::spawn(move || {
                     handle_client(stream, players, world);
                 });
             }
-            Err(e) => {
-                println!("Connection failed: {}", e);
-            }
+            Err(e) => println!("Verbindung fehlgeschlagen: {}", e),
         }
     }
 }
-
-/*Login attempt from username: sd
-Login successful for: sd
-Player list: [Player { uuid: 0fc44095-4196-403c-af0e-b043448e3628, username: "sd", position: (0.0, 64.0, 0.0), health: 20.0, game_mode: Survival, is_operator: false }]
-Sending UUID: 0fc44095-4196-403c-af0e-b043448e3628
-Sending username: sd
-Login success packet length: 41
-Login success packet sent successfully.
-Sending entity ID: [0, 0, 0, 1]
-Sending is hardcore: false
-Sending game mode: 0
-Sending previous game mode: -1
-Sending world count: 1
-Sending world name: minecraft:overworld
-Sending empty NBT tag
-Sending dimension name: minecraft:overworld
-Sending world name again: minecraft:overworld
-Sending hashed seed: [0, 0, 0, 0, 0, 0, 0, 0]
-Sending max players: 10
-Sending view distance: 10
-Sending simulation distance: 10
-Sending reduced debug info: false
-Sending enable respawn screen: true
-Sending is debug: false
-Sending is flat: false
-Join game packet length: 85
-Join game packet sent successfully.
-Client sd disconnected.*/
