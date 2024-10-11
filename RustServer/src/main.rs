@@ -544,8 +544,30 @@ fn main() {
     }
 }
 
-/*Received handshake: packet_id=0, protocol_version=767, server_address=localhost, server_port=25565, next_state=2
-Login attempt from username: sd
+/*Login attempt from username: sd
 Login successful for: sd
-Player list: [Player { uuid: 9b55de80-ddf0-4dfe-a447-6df0e83cdb4e, username: "sd", position: (0.0, 64.0, 0.0), health: 20.0, game_mode: Survival, is_operator: false }]
+Player list: [Player { uuid: 0fc44095-4196-403c-af0e-b043448e3628, username: "sd", position: (0.0, 64.0, 0.0), health: 20.0, game_mode: Survival, is_operator: false }]
+Sending UUID: 0fc44095-4196-403c-af0e-b043448e3628
+Sending username: sd
+Login success packet length: 41
+Login success packet sent successfully.
+Sending entity ID: [0, 0, 0, 1]
+Sending is hardcore: false
+Sending game mode: 0
+Sending previous game mode: -1
+Sending world count: 1
+Sending world name: minecraft:overworld
+Sending empty NBT tag
+Sending dimension name: minecraft:overworld
+Sending world name again: minecraft:overworld
+Sending hashed seed: [0, 0, 0, 0, 0, 0, 0, 0]
+Sending max players: 10
+Sending view distance: 10
+Sending simulation distance: 10
+Sending reduced debug info: false
+Sending enable respawn screen: true
+Sending is debug: false
+Sending is flat: false
+Join game packet length: 85
+Join game packet sent successfully.
 Client sd disconnected.*/
