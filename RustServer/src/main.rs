@@ -293,17 +293,23 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
     packet_data.extend(write_varint_to_vec(0x02)); // Packet ID for Login Success
 
     // Write UUID as a string
-    packet_data.extend(write_string_to_vec(&player.uuid.to_string()));
+    let uuid_str = player.uuid.to_string();
+    packet_data.extend(write_string_to_vec(&uuid_str));
+    println!("Sending UUID: {}", uuid_str);
 
     // Write username
     packet_data.extend(write_string_to_vec(&player.username));
+    println!("Sending username: {}", player.username);
 
     // Write packet length
     let mut packet = vec![];
-    packet.extend(write_varint_to_vec(packet_data.len() as i32));
+    let packet_length = packet_data.len() as i32;
+    packet.extend(write_varint_to_vec(packet_length));
     packet.extend(packet_data);
+    println!("Login success packet length: {}", packet_length);
 
-    stream.write_all(&packet).map_err(|_| "Failed to send login success packet".to_string())?;
+    stream.write_all(&packet).map_err(|e| format!("Failed to send login success packet: {}", e))?;
+    println!("Login success packet sent successfully.");
     Ok(())
 }
 
@@ -312,67 +318,94 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
     packet_data.extend(write_varint_to_vec(0x26)); // Packet ID for Join Game (verify if this ID is correct for the protocol version)
 
     // Entity ID (Int)
-    packet_data.extend(&(1i32.to_be_bytes()));
+    let entity_id = 1i32.to_be_bytes();
+    packet_data.extend(&entity_id);
+    println!("Sending entity ID: {:?}", entity_id);
 
     // Is Hardcore (Boolean)
     packet_data.push(0); // False
+    println!("Sending is hardcore: false");
 
     // Game Mode (Unsigned Byte)
-    packet_data.push(match player.game_mode {
+    let game_mode = match player.game_mode {
         GameMode::Survival => 0,
         GameMode::Creative => 1,
         GameMode::Adventure => 2,
         GameMode::Spectator => 3,
-    });
+    };
+    packet_data.push(game_mode);
+    println!("Sending game mode: {}", game_mode);
 
     // Previous Game Mode (Byte)
     packet_data.push(255u8); // -1 for none
+    println!("Sending previous game mode: -1");
 
     // World Count (VarInt)
     packet_data.extend(write_varint_to_vec(1));
+    println!("Sending world count: 1");
 
     // World Names (Identifier)
-    packet_data.extend(write_string_to_vec("minecraft:overworld"));
+    let world_name = "minecraft:overworld";
+    packet_data.extend(write_string_to_vec(world_name));
+    println!("Sending world name: {}", world_name);
 
     // Dimension Codec (NBT Tag) - We'll send an empty NBT for simplicity
     packet_data.push(0x00); // NBT End Tag
+    println!("Sending empty NBT tag");
 
     // Dimension Name (Identifier)
-    packet_data.extend(write_string_to_vec("minecraft:overworld"));
+    packet_data.extend(write_string_to_vec(world_name));
+    println!("Sending dimension name: {}", world_name);
 
     // World Name (Identifier)
-    packet_data.extend(write_string_to_vec("minecraft:overworld"));
+    packet_data.extend(write_string_to_vec(world_name));
+    println!("Sending world name again: {}", world_name);
 
     // Hashed Seed (Long)
-    packet_data.extend(&0i64.to_be_bytes());
+    let hashed_seed = 0i64.to_be_bytes();
+    packet_data.extend(&hashed_seed);
+    println!("Sending hashed seed: {:?}", hashed_seed);
 
     // Max Players (VarInt)
-    packet_data.extend(write_varint_to_vec(10)); // Example value
+    let max_players = 10;
+    packet_data.extend(write_varint_to_vec(max_players));
+    println!("Sending max players: {}", max_players);
 
     // View Distance (VarInt)
-    packet_data.extend(write_varint_to_vec(10));
+    let view_distance = 10;
+    packet_data.extend(write_varint_to_vec(view_distance));
+    println!("Sending view distance: {}", view_distance);
 
     // Simulation Distance (VarInt)
-    packet_data.extend(write_varint_to_vec(10));
+    let simulation_distance = 10;
+    packet_data.extend(write_varint_to_vec(simulation_distance));
+    println!("Sending simulation distance: {}", simulation_distance);
 
     // Reduced Debug Info (Boolean)
     packet_data.push(0);
+    println!("Sending reduced debug info: false");
 
     // Enable Respawn Screen (Boolean)
     packet_data.push(1);
+    println!("Sending enable respawn screen: true");
 
     // Is Debug (Boolean)
     packet_data.push(0);
+    println!("Sending is debug: false");
 
     // Is Flat (Boolean)
     packet_data.push(0);
+    println!("Sending is flat: false");
 
     // Write packet length
     let mut packet = vec![];
-    packet.extend(write_varint_to_vec(packet_data.len() as i32));
+    let packet_length = packet_data.len() as i32;
+    packet.extend(write_varint_to_vec(packet_length));
     packet.extend(packet_data);
+    println!("Join game packet length: {}", packet_length);
 
-    stream.write_all(&packet).map_err(|_| "Failed to send join game packet".to_string())?;
+    stream.write_all(&packet).map_err(|e| format!("Failed to send join game packet: {}", e))?;
+    println!("Join game packet sent successfully.");
     Ok(())
 }
 
