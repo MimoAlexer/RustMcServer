@@ -3,11 +3,11 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use byteorder::{ReadBytesExt, BigEndian}; // Unused `WriteBytesExt` entfernt
+use byteorder::{ReadBytesExt, BigEndian}; // Entfernte `WriteBytesExt`, da ungenutzt
 use uuid::Uuid;
 use rand::Rng;
 
-// Füge `MAX_PLAYERS` wieder hinzu
+// Konstante für die maximale Anzahl an Spielern
 const MAX_PLAYERS: usize = 100; // Maximale Spieleranzahl, die gleichzeitig verbunden sein können
 
 #[derive(Debug, Clone)]
@@ -15,9 +15,9 @@ struct Player {
     uuid: Uuid,
     username: String,
     position: (f64, f64, f64),
-    _health: f32,              // Vorangestelltes `_` zur Unterdrückung von Warnungen
+    _health: f32,              // Vorangestelltes `_`, um die Warnung zu unterdrücken
     game_mode: GameMode,
-    _is_operator: bool,        // Vorangestelltes `_` zur Unterdrückung von Warnungen
+    _is_operator: bool,        // Vorangestelltes `_`, um die Warnung zu unterdrücken
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -28,15 +28,15 @@ enum GameMode {
 #[derive(Debug, Clone)]
 struct Mob {
     id: Uuid,
-    _mob_type: String,
-    _position: (f64, f64, f64),
-    _health: f32,
+    _mob_type: String,        // Vorangestelltes `_`, um die Warnung zu unterdrücken
+    _position: (f64, f64, f64), // Vorangestelltes `_`, um die Warnung zu unterdrücken
+    _health: f32,             // Vorangestelltes `_`, um die Warnung zu unterdrücken
 }
 
 struct World {
     blocks: HashMap<(i32, i32, i32), String>,
-    _mobs: Vec<Mob>,
-    _dimension: Dimension,
+    _mobs: Vec<Mob>,           // Vorangestelltes `_`, um die Warnung zu unterdrücken
+    _dimension: Dimension,     // Vorangestelltes `_`, um die Warnung zu unterdrücken
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -222,7 +222,6 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, _world: &World) -> Re
     packet_data.extend(&hashed_seed); // Gehashter Seed
     println!("Sende gehashten Seed: {:?}", hashed_seed);
 
-    // Verwendung von `MAX_PLAYERS` - Stelle sicher, dass die Konstante existiert
     packet_data.extend(write_varint_to_vec(MAX_PLAYERS as i32)); // Maximale Spieleranzahl
     println!("Sende maximale Spieleranzahl: {}", MAX_PLAYERS);
 
@@ -275,7 +274,7 @@ fn handle_handshake(stream: &mut TcpStream) -> Result<i32, String> {
     Ok(next_state)
 }
 
-fn handle_status(stream: &mut TcpStream) {
+fn handle_status(_stream: &mut TcpStream) {
     println!("Status-Anfrage erhalten.");
 }
 
@@ -402,21 +401,21 @@ fn main() {
     let players = Arc::new(Mutex::new(Vec::with_capacity(MAX_PLAYERS)));
     let world = Arc::new(Mutex::new(World {
         blocks: HashMap::new(),
-        mobs: vec![
+        _mobs: vec![
             Mob {
                 id: Uuid::new_v4(),
-                mob_type: "Zombie".to_string(),
-                position: (10.0, 64.0, 10.0),
-                health: 20.0,
+                _mob_type: "Zombie".to_string(),
+                _position: (10.0, 64.0, 10.0),
+                _health: 20.0,
             },
             Mob {
                 id: Uuid::new_v4(),
-                mob_type: "Skeleton".to_string(),
-                position: (15.0, 64.0, 15.0),
-                health: 20.0,
+                _mob_type: "Skeleton".to_string(),
+                _position: (15.0, 64.0, 15.0),
+                _health: 20.0,
             },
         ],
-        dimension: Dimension::Overworld,
+        _dimension: Dimension::Overworld,
     }));
     world.lock().unwrap().generate();
     let listener = TcpListener::bind("0.0.0.0:25565").unwrap();
