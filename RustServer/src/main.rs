@@ -447,3 +447,116 @@ fn main() {
         }
     }
 }
+
+/* warning: unused import: `WriteBytesExt`
+ --> src/main.rs:6:31
+  |
+6 | use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
+  |                               ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused variable: `world`
+   --> src/main.rs:190:60
+    |
+190 | fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Result<(), String> {
+    |                                                            ^^^^^ help: if this is intentional, prefix it with an underscore: `_world`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `stream`
+   --> src/main.rs:290:18
+    |
+290 | fn handle_status(stream: &mut TcpStream) {
+    |                  ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stream`
+
+warning: unused variable: `world`
+   --> src/main.rs:308:69
+    |
+308 | fn handle_packet(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut World, player: &Player, buffer: Vec<u8>) {
+    |                                                                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_world`
+
+warning: constant `PROTOCOL_VERSION` is never used
+  --> src/main.rs:10:7
+   |
+10 | const PROTOCOL_VERSION: i32 = 767; // Protokollversion für Minecraft 1.21.1
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: constant `SERVER_NAME` is never used
+  --> src/main.rs:11:7
+   |
+11 | const SERVER_NAME: &str = "Rust Minecraft Server";
+   |       ^^^^^^^^^^^
+
+warning: fields `health` and `is_operator` are never read
+  --> src/main.rs:19:5
+   |
+15 | struct Player {
+   |        ------ fields in this struct
+...
+19 |     health: f32,
+   |     ^^^^^^
+20 |     game_mode: GameMode,
+21 |     is_operator: bool,
+   |     ^^^^^^^^^^^
+   |
+   = note: `Player` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: variants `Creative`, `Adventure`, and `Spectator` are never constructed
+  --> src/main.rs:27:5
+   |
+25 | enum GameMode {
+   |      -------- variants in this enum
+26 |     Survival,
+27 |     Creative,
+   |     ^^^^^^^^
+28 |     Adventure,
+   |     ^^^^^^^^^
+29 |     Spectator,
+   |     ^^^^^^^^^
+   |
+   = note: `GameMode` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `id`, `mob_type`, `position`, and `health` are never read
+  --> src/main.rs:34:5
+   |
+33 | struct Mob {
+   |        --- fields in this struct
+34 |     id: Uuid,
+   |     ^^
+35 |     mob_type: String,
+   |     ^^^^^^^^
+36 |     position: (f64, f64, f64),
+   |     ^^^^^^^^
+37 |     health: f32,
+   |     ^^^^^^
+   |
+   = note: `Mob` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `mobs` and `dimension` are never read
+  --> src/main.rs:42:5
+   |
+40 | struct World {
+   |        ----- fields in this struct
+41 |     blocks: HashMap<(i32, i32, i32), String>,
+42 |     mobs: Vec<Mob>,
+   |     ^^^^
+43 |     dimension: Dimension,
+   |     ^^^^^^^^^
+
+warning: variants `Nether` and `End` are never constructed
+  --> src/main.rs:49:5
+   |
+47 | enum Dimension {
+   |      --------- variants in this enum
+48 |     Overworld,
+49 |     Nether,
+   |     ^^^^^^
+50 |     End,
+   |     ^^^
+   |
+   = note: `Dimension` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: 11 warnings emitted
