@@ -3,51 +3,46 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
+use byteorder::{ReadBytesExt, BigEndian}; // `WriteBytesExt` entfernt
 use uuid::Uuid;
 use rand::Rng;
 
-const PROTOCOL_VERSION: i32 = 767; // Protokollversion für Minecraft 1.21.1
-const SERVER_NAME: &str = "Rust Minecraft Server";
-const MAX_PLAYERS: usize = 100;
+// Entfernte ungenutzte Konstanten: `PROTOCOL_VERSION` und `SERVER_NAME`
 
 #[derive(Debug, Clone)]
 struct Player {
     uuid: Uuid,
     username: String,
     position: (f64, f64, f64),
-    health: f32,
+    _health: f32,              // Vorangestelltes `_` zur Unterdrückung von Warnungen
     game_mode: GameMode,
-    is_operator: bool,
+    _is_operator: bool,        // Vorangestelltes `_` zur Unterdrückung von Warnungen
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GameMode {
     Survival,
-    Creative,
-    Adventure,
-    Spectator,
+    // Entfernte ungenutzte Varianten `Creative`, `Adventure`, `Spectator`
 }
 
 #[derive(Debug, Clone)]
 struct Mob {
     id: Uuid,
-    mob_type: String,
-    position: (f64, f64, f64),
-    health: f32,
+    _mob_type: String,        // Vorangestelltes `_` zur Unterdrückung von Warnungen
+    _position: (f64, f64, f64), // Vorangestelltes `_` zur Unterdrückung von Warnungen
+    _health: f32,             // Vorangestelltes `_` zur Unterdrückung von Warnungen
 }
 
 struct World {
     blocks: HashMap<(i32, i32, i32), String>,
-    mobs: Vec<Mob>,
-    dimension: Dimension,
+    _mobs: Vec<Mob>,           // Vorangestelltes `_` zur Unterdrückung von Warnungen
+    _dimension: Dimension,     // Vorangestelltes `_` zur Unterdrückung von Warnungen
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Dimension {
     Overworld,
-    Nether,
-    End,
+    // Entfernte ungenutzte Varianten `Nether`, `End`
 }
 
 impl World {
@@ -123,9 +118,9 @@ fn handle_client(mut stream: TcpStream, players: Arc<Mutex<Vec<Player>>>, world:
         uuid: Uuid::new_v4(),
         username: username.clone(),
         position: (0.0, 64.0, 0.0),
-        health: 20.0,
+        _health: 20.0,
         game_mode: GameMode::Survival,
-        is_operator: false,
+        _is_operator: false,
     };
     players.lock().unwrap().push(player.clone());
     println!("Spielerliste: {:?}", players.lock().unwrap());
@@ -166,19 +161,16 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
     let mut packet_data = vec![];
     packet_data.extend(write_varint_to_vec(0x02)); // Packet ID für Login Success
 
-    // UUID als String mit Bindestrichen
-    let uuid_str = player.uuid.to_string(); // UUID mit Bindestrichen: "0fc44095-4196-403c-af0e-b043448e3628"
+    let uuid_str = player.uuid.to_string();
     packet_data.extend(write_string_to_vec(&uuid_str));
     println!("Sende UUID: {}", uuid_str);
 
-    // Benutzernamen hinzufügen
     packet_data.extend(write_string_to_vec(&player.username));
     println!("Sende Benutzernamen: {}", player.username);
 
-    // Paketlänge berechnen und senden
     let mut packet = vec![];
     let packet_length = packet_data.len() as i32;
-    packet.extend(write_varint_to_vec(packet_length)); // Länge des Pakets
+    packet.extend(write_varint_to_vec(packet_length));
     packet.extend(packet_data);
     println!("Login-Erfolgs-Paketlänge: {}", packet_length);
 
@@ -187,11 +179,11 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
     Ok(())
 }
 
-fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Result<(), String> {
+fn send_join_game(stream: &mut TcpStream, player: &Player, _world: &World) -> Result<(), String> { // `world` entfernt
     let mut packet_data = vec![];
     packet_data.extend(write_varint_to_vec(0x26)); // Packet ID für Join Game
 
-    let entity_id = 1i32.to_be_bytes(); // Beispiel-Entity ID
+    let entity_id = 1i32.to_be_bytes();
     packet_data.extend(&entity_id);
     println!("Sende Entity ID: {:?}", entity_id);
 
@@ -199,11 +191,8 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
 
     let game_mode = match player.game_mode {
         GameMode::Survival => 0,
-        GameMode::Creative => 1,
-        GameMode::Adventure => 2,
-        GameMode::Spectator => 3,
     };
-    packet_data.push(game_mode); // Aktueller Spielmodus
+    packet_data.push(game_mode);
     println!("Sende Spielmodus: {}", game_mode);
 
     packet_data.push(255u8); // Vorheriger Spielmodus (Byte)
@@ -216,10 +205,10 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
     packet_data.extend(write_string_to_vec(world_name)); // Name der Welt
     println!("Sende Weltname: {}", world_name);
 
-    // Beispielhafter Dimension Codec - Dies muss für das Protokoll angepasst werden
+    // Beispielhafter Dimension Codec - Minimaler NBT-Tag
     let dimension_codec = vec![
         0x0A, // Compound Tag Start
-        0x00, // NBT-Ende
+        0x00, // Compound Tag Ende
     ];
     packet_data.extend(dimension_codec);
     println!("Sende Dimension Codec NBT");
@@ -238,11 +227,11 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
     println!("Sende maximale Spieleranzahl: {}", MAX_PLAYERS);
 
     let view_distance = 10;
-    packet_data.extend(write_varint_to_vec(view_distance)); // Sichtweite
+    packet_data.extend(write_varint_to_vec(view_distance));
     println!("Sende Sichtweite: {}", view_distance);
 
     let simulation_distance = 10;
-    packet_data.extend(write_varint_to_vec(simulation_distance)); // Simulationsdistanz
+    packet_data.extend(write_varint_to_vec(simulation_distance));
     println!("Sende Simulations-Distanz: {}", simulation_distance);
 
     packet_data.push(0); // Reduzierte Debug-Info (Boolean)
@@ -257,10 +246,9 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
     packet_data.push(0); // Ist flache Welt (Boolean)
     println!("Sende flache Welt: false");
 
-    // Paketlänge berechnen und senden
     let mut packet = vec![];
     let packet_length = packet_data.len() as i32;
-    packet.extend(write_varint_to_vec(packet_length)); // Länge des Pakets
+    packet.extend(write_varint_to_vec(packet_length));
     packet.extend(packet_data);
     println!("Beitrittspaket-Länge: {}", packet_length);
 
@@ -447,116 +435,3 @@ fn main() {
         }
     }
 }
-
-/* warning: unused import: `WriteBytesExt`
- --> src/main.rs:6:31
-  |
-6 | use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
-  |                               ^^^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` on by default
-
-warning: unused variable: `world`
-   --> src/main.rs:190:60
-    |
-190 | fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Result<(), String> {
-    |                                                            ^^^^^ help: if this is intentional, prefix it with an underscore: `_world`
-    |
-    = note: `#[warn(unused_variables)]` on by default
-
-warning: unused variable: `stream`
-   --> src/main.rs:290:18
-    |
-290 | fn handle_status(stream: &mut TcpStream) {
-    |                  ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stream`
-
-warning: unused variable: `world`
-   --> src/main.rs:308:69
-    |
-308 | fn handle_packet(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut World, player: &Player, buffer: Vec<u8>) {
-    |                                                                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_world`
-
-warning: constant `PROTOCOL_VERSION` is never used
-  --> src/main.rs:10:7
-   |
-10 | const PROTOCOL_VERSION: i32 = 767; // Protokollversion für Minecraft 1.21.1
-   |       ^^^^^^^^^^^^^^^^
-   |
-   = note: `#[warn(dead_code)]` on by default
-
-warning: constant `SERVER_NAME` is never used
-  --> src/main.rs:11:7
-   |
-11 | const SERVER_NAME: &str = "Rust Minecraft Server";
-   |       ^^^^^^^^^^^
-
-warning: fields `health` and `is_operator` are never read
-  --> src/main.rs:19:5
-   |
-15 | struct Player {
-   |        ------ fields in this struct
-...
-19 |     health: f32,
-   |     ^^^^^^
-20 |     game_mode: GameMode,
-21 |     is_operator: bool,
-   |     ^^^^^^^^^^^
-   |
-   = note: `Player` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-
-warning: variants `Creative`, `Adventure`, and `Spectator` are never constructed
-  --> src/main.rs:27:5
-   |
-25 | enum GameMode {
-   |      -------- variants in this enum
-26 |     Survival,
-27 |     Creative,
-   |     ^^^^^^^^
-28 |     Adventure,
-   |     ^^^^^^^^^
-29 |     Spectator,
-   |     ^^^^^^^^^
-   |
-   = note: `GameMode` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-
-warning: fields `id`, `mob_type`, `position`, and `health` are never read
-  --> src/main.rs:34:5
-   |
-33 | struct Mob {
-   |        --- fields in this struct
-34 |     id: Uuid,
-   |     ^^
-35 |     mob_type: String,
-   |     ^^^^^^^^
-36 |     position: (f64, f64, f64),
-   |     ^^^^^^^^
-37 |     health: f32,
-   |     ^^^^^^
-   |
-   = note: `Mob` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-
-warning: fields `mobs` and `dimension` are never read
-  --> src/main.rs:42:5
-   |
-40 | struct World {
-   |        ----- fields in this struct
-41 |     blocks: HashMap<(i32, i32, i32), String>,
-42 |     mobs: Vec<Mob>,
-   |     ^^^^
-43 |     dimension: Dimension,
-   |     ^^^^^^^^^
-
-warning: variants `Nether` and `End` are never constructed
-  --> src/main.rs:49:5
-   |
-47 | enum Dimension {
-   |      --------- variants in this enum
-48 |     Overworld,
-49 |     Nether,
-   |     ^^^^^^
-50 |     End,
-   |     ^^^
-   |
-   = note: `Dimension` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-
-warning: 11 warnings emitted
