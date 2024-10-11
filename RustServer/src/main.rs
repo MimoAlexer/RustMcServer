@@ -3,11 +3,12 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use byteorder::{ReadBytesExt, BigEndian}; // `WriteBytesExt` entfernt
+use byteorder::{ReadBytesExt, BigEndian}; // Unused `WriteBytesExt` entfernt
 use uuid::Uuid;
 use rand::Rng;
 
-// Entfernte ungenutzte Konstanten: `PROTOCOL_VERSION` und `SERVER_NAME`
+// Füge `MAX_PLAYERS` wieder hinzu
+const MAX_PLAYERS: usize = 100; // Maximale Spieleranzahl, die gleichzeitig verbunden sein können
 
 #[derive(Debug, Clone)]
 struct Player {
@@ -22,27 +23,25 @@ struct Player {
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GameMode {
     Survival,
-    // Entfernte ungenutzte Varianten `Creative`, `Adventure`, `Spectator`
 }
 
 #[derive(Debug, Clone)]
 struct Mob {
     id: Uuid,
-    _mob_type: String,        // Vorangestelltes `_` zur Unterdrückung von Warnungen
-    _position: (f64, f64, f64), // Vorangestelltes `_` zur Unterdrückung von Warnungen
-    _health: f32,             // Vorangestelltes `_` zur Unterdrückung von Warnungen
+    _mob_type: String,
+    _position: (f64, f64, f64),
+    _health: f32,
 }
 
 struct World {
     blocks: HashMap<(i32, i32, i32), String>,
-    _mobs: Vec<Mob>,           // Vorangestelltes `_` zur Unterdrückung von Warnungen
-    _dimension: Dimension,     // Vorangestelltes `_` zur Unterdrückung von Warnungen
+    _mobs: Vec<Mob>,
+    _dimension: Dimension,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Dimension {
     Overworld,
-    // Entfernte ungenutzte Varianten `Nether`, `End`
 }
 
 impl World {
@@ -179,7 +178,7 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
     Ok(())
 }
 
-fn send_join_game(stream: &mut TcpStream, player: &Player, _world: &World) -> Result<(), String> { // `world` entfernt
+fn send_join_game(stream: &mut TcpStream, player: &Player, _world: &World) -> Result<(), String> {
     let mut packet_data = vec![];
     packet_data.extend(write_varint_to_vec(0x26)); // Packet ID für Join Game
 
@@ -223,6 +222,7 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, _world: &World) -> Re
     packet_data.extend(&hashed_seed); // Gehashter Seed
     println!("Sende gehashten Seed: {:?}", hashed_seed);
 
+    // Verwendung von `MAX_PLAYERS` - Stelle sicher, dass die Konstante existiert
     packet_data.extend(write_varint_to_vec(MAX_PLAYERS as i32)); // Maximale Spieleranzahl
     println!("Sende maximale Spieleranzahl: {}", MAX_PLAYERS);
 
