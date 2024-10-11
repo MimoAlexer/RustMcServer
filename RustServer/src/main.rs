@@ -131,127 +131,14 @@ fn handle_client(mut stream: TcpStream, players: Arc<Mutex<Vec<Player>>>, world:
     players.lock().unwrap().push(player.clone());
     println!("Spielerliste: {:?}", players.lock().unwrap());
 
-    fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), String> {
-        let mut packet_data = vec![];
-        packet_data.extend(write_varint_to_vec(0x02)); // Packet ID für Login Success
-
-        // UUID als String ohne Bindestriche
-        let uuid_str = player.uuid.simple().to_string(); // UUID ohne Bindestriche, z.B. "0fc440954196403caf0eb043448e3628"
-        packet_data.extend(write_string_to_vec(&uuid_str));
-        println!("Sende UUID: {}", uuid_str);
-
-        // Benutzernamen hinzufügen
-        packet_data.extend(write_string_to_vec(&player.username));
-        println!("Sende Benutzernamen: {}", player.username);
-
-        // Paketlänge berechnen und senden
-        let mut packet = vec![];
-        let packet_length = packet_data.len() as i32;
-        packet.extend(write_varint_to_vec(packet_length)); // Länge des Pakets
-        packet.extend(packet_data);
-        println!("Login-Erfolgs-Paketlänge: {}", packet_length);
-
-        // Paket an den Stream senden
-        stream.write_all(&packet).map_err(|e| format!("Fehler beim Senden des Login-Erfolgspakets: {}", e))?;
-        println!("Login-Erfolgs-Paket erfolgreich gesendet.");
-        Ok(())
+    if let Err(_) = send_login_success(&mut stream, &player) {
+        println!("Fehler beim Senden des Login-Erfolgs an {}", username);
+        return;
     }
 
-    fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Result<(), String> {
-        let mut packet_data = vec![];
-        packet_data.extend(write_varint_to_vec(0x26)); // Packet ID für Join Game
-
-        // Entity ID als Integer
-        let entity_id = 1i32.to_be_bytes(); // Beispiel-ID für den Spieler, normalerweise dynamisch
-        packet_data.extend(&entity_id);
-        println!("Sende Entity ID: {:?}", entity_id);
-
-        // Ist Hardcore (Boolean)
-        packet_data.push(0); // False für nicht-hardcore
-
-        // Spielmodus (Unsigned Byte)
-        let game_mode = match player.game_mode {
-            GameMode::Survival => 0,
-            GameMode::Creative => 1,
-            GameMode::Adventure => 2,
-            GameMode::Spectator => 3,
-        };
-        packet_data.push(game_mode);
-        println!("Sende Spielmodus: {}", game_mode);
-
-        // Vorheriger Spielmodus (Byte)
-        packet_data.push(255u8); // -1 für keinen vorherigen Spielmodus
-        println!("Sende vorherigen Spielmodus: -1");
-
-        // Anzahl der Welten (VarInt)
-        packet_data.extend(write_varint_to_vec(1));
-        println!("Sende Weltanzahl: 1");
-
-        // Weltname (Identifier)
-        let world_name = "minecraft:overworld";
-        packet_data.extend(write_string_to_vec(world_name));
-        println!("Sende Weltname: {}", world_name);
-
-        // Dimension Codec (NBT Tag) - Minimaler NBT-Tag
-        packet_data.push(0x0A); // NBT Compound Tag
-        packet_data.push(0x00); // Leerzeichen-String
-        packet_data.push(0x00); // Ende des Compound-Tags
-        println!("Sende leeren NBT-Tag");
-
-        // Dimension Name (Identifier)
-        packet_data.extend(write_string_to_vec(world_name));
-        println!("Sende Dimension Name: {}", world_name);
-
-        // Weltname erneut senden
-        packet_data.extend(write_string_to_vec(world_name));
-        println!("Sende Weltname erneut: {}", world_name);
-
-        // Gehashter Seed (Long)
-        let hashed_seed = 0i64.to_be_bytes();
-        packet_data.extend(&hashed_seed);
-        println!("Sende gehashten Seed: {:?}", hashed_seed);
-
-        // Maximale Spieleranzahl (VarInt)
-        packet_data.extend(write_varint_to_vec(MAX_PLAYERS as i32));
-        println!("Sende maximale Spieleranzahl: {}", MAX_PLAYERS);
-
-        // Sichtweite (VarInt)
-        let view_distance = 10;
-        packet_data.extend(write_varint_to_vec(view_distance));
-        println!("Sende Sichtweite: {}", view_distance);
-
-        // Simulations-Distanz (VarInt)
-        let simulation_distance = 10;
-        packet_data.extend(write_varint_to_vec(simulation_distance));
-        println!("Sende Simulations-Distanz: {}", simulation_distance);
-
-        // Reduzierte Debug-Info (Boolean)
-        packet_data.push(0); // False für nicht reduziert
-        println!("Sende reduzierte Debug-Info: false");
-
-        // Respawn-Bildschirm aktivieren (Boolean)
-        packet_data.push(1); // True für aktiviert
-        println!("Sende Respawn-Bildschirm: true");
-
-        // Ist Debug-Welt (Boolean)
-        packet_data.push(0); // False für keine Debug-Welt
-        println!("Sende Debug-Welt: false");
-
-        // Ist flache Welt (Boolean)
-        packet_data.push(0); // False für nicht flach
-        println!("Sende flache Welt: false");
-
-        // Paketlänge berechnen und senden
-        let mut packet = vec![];
-        let packet_length = packet_data.len() as i32;
-        packet.extend(write_varint_to_vec(packet_length)); // Länge des Pakets
-        packet.extend(packet_data);
-        println!("Beitrittspaket-Länge: {}", packet_length);
-
-        // Paket an den Stream senden
-        stream.write_all(&packet).map_err(|e| format!("Fehler beim Senden des Beitrittspakets: {}", e))?;
-        println!("Beitrittspaket erfolgreich gesendet.");
-        Ok(())
+    if let Err(_) = send_join_game(&mut stream, &player, &world.lock().unwrap()) {
+        println!("Fehler beim Senden des Beitritts an {}", username);
+        return;
     }
 
     loop {
@@ -274,6 +161,109 @@ fn handle_client(mut stream: TcpStream, players: Arc<Mutex<Vec<Player>>>, world:
             }
         }
     }
+}
+
+fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), String> {
+    let mut packet_data = vec![];
+    packet_data.extend(write_varint_to_vec(0x02)); // Packet ID für Login Success
+
+    // UUID als String ohne Bindestriche
+    let uuid_str = player.uuid.simple().to_string();
+    packet_data.extend(write_string_to_vec(&uuid_str));
+    println!("Sende UUID: {}", uuid_str);
+
+    // Benutzernamen hinzufügen
+    packet_data.extend(write_string_to_vec(&player.username));
+    println!("Sende Benutzernamen: {}", player.username);
+
+    // Paketlänge berechnen und senden
+    let mut packet = vec![];
+    let packet_length = packet_data.len() as i32;
+    packet.extend(write_varint_to_vec(packet_length)); // Länge des Pakets
+    packet.extend(packet_data);
+    println!("Login-Erfolgs-Paketlänge: {}", packet_length);
+
+    stream.write_all(&packet).map_err(|e| format!("Fehler beim Senden des Login-Erfolgspakets: {}", e))?;
+    println!("Login-Erfolgs-Paket erfolgreich gesendet.");
+    Ok(())
+}
+
+fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Result<(), String> {
+    let mut packet_data = vec![];
+    packet_data.extend(write_varint_to_vec(0x26)); // Packet ID für Join Game
+
+    let entity_id = 1i32.to_be_bytes();
+    packet_data.extend(&entity_id);
+    println!("Sende Entity ID: {:?}", entity_id);
+
+    packet_data.push(0); // False für nicht-hardcore
+
+    let game_mode = match player.game_mode {
+        GameMode::Survival => 0,
+        GameMode::Creative => 1,
+        GameMode::Adventure => 2,
+        GameMode::Spectator => 3,
+    };
+    packet_data.push(game_mode);
+    println!("Sende Spielmodus: {}", game_mode);
+
+    packet_data.push(255u8); // -1 für keinen vorherigen Spielmodus
+    println!("Sende vorherigen Spielmodus: -1");
+
+    packet_data.extend(write_varint_to_vec(1));
+    println!("Sende Weltanzahl: 1");
+
+    let world_name = "minecraft:overworld";
+    packet_data.extend(write_string_to_vec(world_name));
+    println!("Sende Weltname: {}", world_name);
+
+    packet_data.push(0x0A); // NBT Compound Tag
+    packet_data.push(0x00); // Leerzeichen-String
+    packet_data.push(0x00); // Ende des Compound-Tags
+    println!("Sende leeren NBT-Tag");
+
+    packet_data.extend(write_string_to_vec(world_name));
+    println!("Sende Dimension Name: {}", world_name);
+
+    packet_data.extend(write_string_to_vec(world_name));
+    println!("Sende Weltname erneut: {}", world_name);
+
+    let hashed_seed = 0i64.to_be_bytes();
+    packet_data.extend(&hashed_seed);
+    println!("Sende gehashten Seed: {:?}", hashed_seed);
+
+    packet_data.extend(write_varint_to_vec(MAX_PLAYERS as i32));
+    println!("Sende maximale Spieleranzahl: {}", MAX_PLAYERS);
+
+    let view_distance = 10;
+    packet_data.extend(write_varint_to_vec(view_distance));
+    println!("Sende Sichtweite: {}", view_distance);
+
+    let simulation_distance = 10;
+    packet_data.extend(write_varint_to_vec(simulation_distance));
+    println!("Sende Simulations-Distanz: {}", simulation_distance);
+
+    packet_data.push(0);
+    println!("Sende reduzierte Debug-Info: false");
+
+    packet_data.push(1);
+    println!("Sende Respawn-Bildschirm: true");
+
+    packet_data.push(0);
+    println!("Sende Debug-Welt: false");
+
+    packet_data.push(0);
+    println!("Sende flache Welt: false");
+
+    let mut packet = vec![];
+    let packet_length = packet_data.len() as i32;
+    packet.extend(write_varint_to_vec(packet_length));
+    packet.extend(packet_data);
+    println!("Beitrittspaket-Länge: {}", packet_length);
+
+    stream.write_all(&packet).map_err(|e| format!("Fehler beim Senden des Beitrittspakets: {}", e))?;
+    println!("Beitrittspaket erfolgreich gesendet.");
+    Ok(())
 }
 
 fn handle_handshake(stream: &mut TcpStream) -> Result<i32, String> {
@@ -325,7 +315,7 @@ fn handle_packet(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut 
     }
 }
 
-fn handle_player_position(stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
+fn handle_player_position(_stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
     if cursor.get_ref().len() >= 24 {
         let x = cursor.read_f64::<BigEndian>().unwrap();
         let y = cursor.read_f64::<BigEndian>().unwrap();
@@ -337,7 +327,7 @@ fn handle_player_position(stream: &mut TcpStream, players: &mut Vec<Player>, pla
     }
 }
 
-fn handle_player_position_and_rotation(stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
+fn handle_player_position_and_rotation(_stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
     if cursor.get_ref().len() >= 32 {
         let x = cursor.read_f64::<BigEndian>().unwrap();
         let y = cursor.read_f64::<BigEndian>().unwrap();
