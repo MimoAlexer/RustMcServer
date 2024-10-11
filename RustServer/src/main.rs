@@ -167,8 +167,8 @@ fn send_login_success(stream: &mut TcpStream, player: &Player) -> Result<(), Str
     let mut packet_data = vec![];
     packet_data.extend(write_varint_to_vec(0x02)); // Packet ID für Login Success
 
-    // UUID als String ohne Bindestriche
-    let uuid_str = player.uuid.simple().to_string();
+    // UUID als String ohne Bindestriche (formatieren, um sicherzustellen, dass der Client es akzeptiert)
+    let uuid_str = player.uuid.hyphenated().to_string(); // UUID als String mit Bindestrichen, z.B. "0fc44095-4196-403c-af0e-b043448e3628"
     packet_data.extend(write_string_to_vec(&uuid_str));
     println!("Sende UUID: {}", uuid_str);
 
@@ -192,11 +192,11 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
     let mut packet_data = vec![];
     packet_data.extend(write_varint_to_vec(0x26)); // Packet ID für Join Game
 
-    let entity_id = 1i32.to_be_bytes();
+    let entity_id = 1i32.to_be_bytes(); // Beispiel-Entity ID
     packet_data.extend(&entity_id);
     println!("Sende Entity ID: {:?}", entity_id);
 
-    packet_data.push(0); // False für nicht-hardcore
+    packet_data.push(0); // Is Hardcore (Boolean)
 
     let game_mode = match player.game_mode {
         GameMode::Survival => 0,
@@ -204,60 +204,68 @@ fn send_join_game(stream: &mut TcpStream, player: &Player, world: &World) -> Res
         GameMode::Adventure => 2,
         GameMode::Spectator => 3,
     };
-    packet_data.push(game_mode);
+    packet_data.push(game_mode); // Aktueller Spielmodus
     println!("Sende Spielmodus: {}", game_mode);
 
-    packet_data.push(255u8); // -1 für keinen vorherigen Spielmodus
+    packet_data.push(255u8); // Vorheriger Spielmodus (Byte)
     println!("Sende vorherigen Spielmodus: -1");
 
-    packet_data.extend(write_varint_to_vec(1));
+    packet_data.extend(write_varint_to_vec(1)); // Anzahl der Welten
     println!("Sende Weltanzahl: 1");
 
     let world_name = "minecraft:overworld";
-    packet_data.extend(write_string_to_vec(world_name));
+    packet_data.extend(write_string_to_vec(world_name)); // Name der Welt
     println!("Sende Weltname: {}", world_name);
 
-    packet_data.push(0x0A); // NBT Compound Tag
-    packet_data.push(0x00); // Leerzeichen-String
-    packet_data.push(0x00); // Ende des Compound-Tags
-    println!("Sende leeren NBT-Tag");
+    // Sende Dimension Codec als vollständiges NBT-Tag
+    let dimension_codec = vec![
+        0x0A, // Compound Tag Start
+        0x00, 0x00, // Name des Compound-Tags leer
+        0x0A, // Compound Tag
+        0x00, 0x0B, // Länge der Stringlänge
+        0x5F, 0x44, 0x49, 0x4D, 0x45, 0x4E, 0x53, 0x49, 0x4F, 0x4E, 0x53, // "_DIMENSIONS"
+        0x00, 0x00, // Ende des Compound Tags
+    ];
+    packet_data.extend(dimension_codec); // Beispiel-NBT-Tag (dies sollte an das tatsächliche Protokoll angepasst werden)
+    println!("Sende Dimension Codec NBT");
 
-    packet_data.extend(write_string_to_vec(world_name));
+    packet_data.extend(write_string_to_vec(world_name)); // Dimension Name
     println!("Sende Dimension Name: {}", world_name);
 
-    packet_data.extend(write_string_to_vec(world_name));
+    packet_data.extend(write_string_to_vec(world_name)); // Weltname erneut senden
     println!("Sende Weltname erneut: {}", world_name);
 
     let hashed_seed = 0i64.to_be_bytes();
-    packet_data.extend(&hashed_seed);
+    packet_data.extend(&hashed_seed); // Gehashter Seed
     println!("Sende gehashten Seed: {:?}", hashed_seed);
 
-    packet_data.extend(write_varint_to_vec(MAX_PLAYERS as i32));
+    packet_data.extend(write_varint_to_vec(MAX_PLAYERS as i32)); // Maximale Spieleranzahl
     println!("Sende maximale Spieleranzahl: {}", MAX_PLAYERS);
 
     let view_distance = 10;
-    packet_data.extend(write_varint_to_vec(view_distance));
+    packet_data.extend(write_varint_to_vec(view_distance)); // Sichtweite
     println!("Sende Sichtweite: {}", view_distance);
 
     let simulation_distance = 10;
-    packet_data.extend(write_varint_to_vec(simulation_distance));
+    packet_data.extend(write_varint_to_vec(simulation_distance)); // Simulationsdistanz
     println!("Sende Simulations-Distanz: {}", simulation_distance);
 
-    packet_data.push(0);
+    packet_data.push(0); // Reduzierte Debug-Info (Boolean)
     println!("Sende reduzierte Debug-Info: false");
 
-    packet_data.push(1);
+    packet_data.push(1); // Respawn-Bildschirm aktiviert (Boolean)
     println!("Sende Respawn-Bildschirm: true");
 
-    packet_data.push(0);
+    packet_data.push(0); // Ist Debug-Welt (Boolean)
     println!("Sende Debug-Welt: false");
 
-    packet_data.push(0);
+    packet_data.push(0); // Ist flache Welt (Boolean)
     println!("Sende flache Welt: false");
 
+    // Paketlänge berechnen und senden
     let mut packet = vec![];
     let packet_length = packet_data.len() as i32;
-    packet.extend(write_varint_to_vec(packet_length));
+    packet.extend(write_varint_to_vec(packet_length)); // Länge des Pakets
     packet.extend(packet_data);
     println!("Beitrittspaket-Länge: {}", packet_length);
 
