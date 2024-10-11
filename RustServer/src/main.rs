@@ -194,9 +194,9 @@ fn handle_packet(stream: &mut TcpStream, players: &mut Vec<Player>, world: &mut 
 
 fn handle_player_position(stream: &mut TcpStream, players: &mut Vec<Player>, player: &Player, cursor: &mut std::io::Cursor<Vec<u8>>) {
     if cursor.get_ref().len() >= 24 {
-        let x = cursor.read_f64::<BigEndian>().unwrap();
-        let y = cursor.read_f64::<BigEndian>().unwrap();
-        let z = cursor.read_f64::<BigEndian>().unwrap();
+        let x = cursor.read_f64::<BigEndian>().map_err(|e| println!("Error reading x position: {}", e)).unwrap();
+        let y = cursor.read_f64::<BigEndian>().map_err(|e| println!("Error reading y position: {}", e)).unwrap();
+        let z = cursor.read_f64::<BigEndian>().map_err(|e| println!("Error reading z position: {}", e)).unwrap();
         println!("Player {} moved to position: ({}, {}, {})", player.username, x, y, z);
 
         // Update player position
@@ -224,33 +224,33 @@ fn handle_player_position_and_rotation(stream: &mut TcpStream, players: &mut Vec
 
 fn handle_handshake(stream: &mut TcpStream) -> Result<i32, String> {
     // Read packet length
-    let packet_length = read_varint(stream).map_err(|_| "Failed to read packet length".to_string())?;
+    let packet_length = read_varint(stream).map_err(|e| format!("Failed to read packet length: {}", e))?;
 
     // Read the entire packet based on the packet length
     let mut packet_data = vec![0u8; packet_length as usize];
-    stream.read_exact(&mut packet_data).map_err(|_| "Failed to read handshake packet".to_string())?;
+    stream.read_exact(&mut packet_data).map_err(|e| format!("Failed to read handshake packet: {}", e))?;
 
     // Use a cursor to read from the packet data buffer
     let mut cursor = std::io::Cursor::new(packet_data);
 
     // Read packet ID
-    let packet_id = read_varint_from_cursor(&mut cursor).map_err(|_| "Failed to read packet ID".to_string())?;
+    let packet_id = read_varint_from_cursor(&mut cursor).map_err(|e| format!("Failed to read packet ID: {}", e))?;
 
     if packet_id != 0x00 {
         return Err(format!("Invalid packet ID for handshake: {}", packet_id));
     }
 
     // Read protocol version
-    let protocol_version = read_varint_from_cursor(&mut cursor).map_err(|_| "Failed to read protocol version".to_string())?;
+    let protocol_version = read_varint_from_cursor(&mut cursor).map_err(|e| format!("Failed to read protocol version: {}", e))?;
 
     // Read server address (string)
-    let server_address = read_string_from_cursor(&mut cursor).map_err(|_| "Failed to read server address".to_string())?;
+    let server_address = read_string_from_cursor(&mut cursor).map_err(|e| format!("Failed to read server address: {}", e))?;
 
     // Read server port (unsigned short)
-    let server_port = cursor.read_u16::<BigEndian>().map_err(|_| "Failed to read server port".to_string())?;
+    let server_port = cursor.read_u16::<BigEndian>().map_err(|e| format!("Failed to read server port: {}", e))?;
 
     // Read next state (VarInt)
-    let next_state = read_varint_from_cursor(&mut cursor).map_err(|_| "Failed to read next state".to_string())?;
+    let next_state = read_varint_from_cursor(&mut cursor).map_err(|e| format!("Failed to read next state: {}", e))?;
 
     println!("Received handshake: packet_id={}, protocol_version={}, server_address={}, server_port={}, next_state={}",
              packet_id, protocol_version, server_address, server_port, next_state);
