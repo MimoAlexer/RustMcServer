@@ -510,3 +510,9 @@ fn main() {
         }
     }
 }
+
+/*Received handshake: packet_id=0, protocol_version=767, server_address=localhost, server_port=25565, next_state=2
+Login attempt from username: sd
+Login successful for: sd
+Player list: [Player { uuid: 9b55de80-ddf0-4dfe-a447-6df0e83cdb4e, username: "sd", position: (0.0, 64.0, 0.0), health: 20.0, game_mode: Survival, is_operator: false }]
+Client sd disconnected.*/
